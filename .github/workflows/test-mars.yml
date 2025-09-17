@@ -24,9 +24,9 @@ jobs:
         with:
           repository: elixir-europe/MARS
           path: test-data
-          sparse-checkout: 'test-data/*'
+          sparse-checkout: 'test-data/'
       - name: show files
-        run: ls -la .
+        run: ls -la test-data
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
