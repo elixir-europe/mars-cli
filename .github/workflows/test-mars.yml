@@ -2,10 +2,10 @@ name: Test MARS
 on:
   push:
     paths:
-      - "mars-cli/**"
+      - "mars_lib/**"
   pull_request:
     paths:
-      - "mars-cli/**"
+      - "mars_lib/**"
     branches:
       - main
   workflow_dispatch:
@@ -17,8 +17,6 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         python-version: ["3.9", "3.13"]
     runs-on: ${{ matrix.os }}
-    env:
-      working-directory: ./mars-cli
         
     steps:
       - uses: actions/checkout@v4
