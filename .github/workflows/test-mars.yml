@@ -20,6 +20,11 @@ jobs:
         
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: https://github.com/elixir-europe/MARS.git
+          path: .
+          sparse-checkout: 'test-data/'
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
