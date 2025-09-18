@@ -2,6 +2,47 @@
 
 The MARS-CLI tool is a powerful interface for submitting metadata and associated files to various biological repository services like ENA, BioSamples, and MetaboLights. This command-line tool is useful for managing and validating metadata submissions in a ISA-JSON, as well as for automating aspects of repository submissions.
 
+## Main Steps of MARS-CLI  
+
+1. **Ingesting and Validating the ISA-JSON**  
+MARS-CLI requires certain mandatory fields beyond the standard ISA specification (e.g., `target_repository` as a comment). Upon ingestion, the ISA-JSON is loaded into memory and validated using Pydantic to ensure it meets these requirements.  
+
+2. **Identifying the Target Repositories**  
+The order of submission depends on the repositories specified in the ISA-JSON. MARS-CLI determines the correct sequence for submitting metadata and data.  
+
+3. **Registering Samples in BioSamples**  
+MARS-CLI first submits the ISA-JSON to BioSamples via a newly developed API. BioSamples accessions are crucial since other repositories reuse them. After submission, BioSamples returns a receipt containing accessions for `Source` and `Sample`, mapped to `Source characteristics` and `Sample characteristics`, respectively.  
+
+4. **Filtering the ISA-JSON**  
+Once updated with BioSamples accessions, the ISA-JSON is filtered for each target repository. This ensures that only relevant metadata is submitted to each repository. The filtering is based on the `target repository` attribute present in the ISA-JSON assays.  
+
+5. **Submitting Data to Target Repositories**  
+MARS-CLI uploads data using FTP. Some repositories require that data files are present in their upload space before metadata submission. This step ensures that data availability and checksum validation are completed before sending metadata.  
+
+6. **Registering ISA-JSON at the Target Repositories**  
+The filtered ISA-JSON is submitted to repositories that accept ISA-JSON metadata, such as ENA. The MARS project helps out with the adaptation of ISA-JSON by the repositories using the so called adapters. 
+
+7. **Processing Repository Receipts and Errors**  
+After submission, each repository returns a receipt in a standardized format defined for MARS (see [repository-api info](https://github.com/elixir-europe/MARS/tree/main/repository-services/repository-api.md)).  
+- The receipt includes the paths of objects within the ISA-JSON and their assigned accession numbers.  
+- Errors encountered during submission are processed and reported accordingly.  
+
+8. **Updating BioSamples External References**  
+The Data Broker retrieves the BioSamples JSONs of the submitted samples using its accession numbers and updates the `External References` schema by adding the accession numbers assigned by other target repositories.  
+
+9. **Generating an Updated ISA-JSON with Repository Information**  
+Based on the information in repository receipts, the ISA-JSON is updated with accession numbers linked to submitted metadata objects. This final, enriched ISA-JSON can then be provided as output.  
+
+#### Credential management
+
+MARS-CLI comes with the functionality to interact with your device's keychain backend in order to fetch the necessary credentials. This allows the user to set credentials in a safe way. 
+
+#### Data submission
+
+MARS-CLI is not a platform to host data and will not store the data after submission to the target repository. This should be handled by the [Data broker platform](https://github.com/elixir-europe/MARS/tree/main/README.md#data-broker-platform) where MARS-CLI is installed. The ISA-JSON provided to the application will be updated and stored in the BioSamples repository as an External Reference, but is otherwise considered as ephemeral.
+
+
+
 ## Installation
 
 This installation procedure describes a typical Linux installation. This application can perfectly work on Windows and MacOS but some of the steps might be different. 
