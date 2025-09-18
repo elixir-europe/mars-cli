@@ -23,7 +23,7 @@ def test_upload_success():
     uploader = FTPUploader("webin2.ebi.ac.uk", creds["username"], creds["password"])
     uploader.upload(
         [
-            Path("../test-data/ENA_TEST2.R1.fastq.gz"),
+            Path("MARS/test-data/ENA_TEST2.R1.fastq.gz"),
             Path("./tests/fixtures/not_a_json_file.txt"),
         ]
     )

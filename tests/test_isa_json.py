@@ -27,13 +27,13 @@ import json
 def test_load_isa_json():
     # Should test the validation process of the ISA JSON file where root level = investigation.
     valid_isa_json01 = load_isa_json(
-        "../test-data/ISA-BH2023-ALL/isa-bh2023-all.json", True
+        "MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json", True
     )
     assert len(valid_isa_json01.investigation.studies) == 1
     assert valid_isa_json01.investigation.studies[0].identifier == "BH2023"
 
     # Should test the validation process of the ISA JSON file where root has 'investigation' as key.
-    valid_isa_json02 = load_isa_json("../test-data/biosamples-input-isa.json", False)
+    valid_isa_json02 = load_isa_json("MARS/test-data/biosamples-input-isa.json", False)
     assert len(valid_isa_json02.investigation.studies) == 1
     assert valid_isa_json02.investigation.studies[0].title == "Arabidopsis thaliana"
 
@@ -43,7 +43,7 @@ def test_load_isa_json():
 
 def test_reduce_isa_json_for_target_repo():
     good_isa_json = load_isa_json(
-        "../test-data/ISA-BH2023-ALL/isa-bh2023-all.json", True
+        "MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json", True
     )
 
     filtered_isa_json = reduce_isa_json_for_target_repo(
@@ -60,7 +60,7 @@ def test_reduce_isa_json_for_target_repo():
 
 def test_reduce_isa_json_for_biosamples():
     good_isa_json = load_isa_json(
-        "../test-data/ISA-BH2023-ALL/isa-bh2023-all.json", True
+        "MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json", True
     )
 
     filtered_isa_json = reduce_isa_json_for_target_repo(
@@ -180,7 +180,7 @@ def test_target_repo_comment_validator():
 
 def test_update_study_materials_no_accession_categories():
     # This file has no characteristics for accessions
-    json_path = "../test-data/biosamples-original-isa-no-accesion-char.json"
+    json_path = "MARS/test-data/biosamples-original-isa-no-accesion-char.json"
     with open(json_path) as json_file:
         json_data = json.load(json_file)
 
@@ -214,7 +214,7 @@ def test_update_study_materials_no_accession_categories():
 
 def test_update_study_materials_with_accession_categories():
     # This file has no characteristics for accessions
-    json_path = "../test-data/biosamples-original-isa.json"
+    json_path = "MARS/test-data/biosamples-original-isa.json"
     with open(json_path) as json_file:
         json_data = json.load(json_file)
 
@@ -308,45 +308,45 @@ def test_filename_validation():
 
 def test_map_data_files_to_repositories():
     isa_json = load_isa_json(
-        file_path="../test-data/ISA-BH2024-ALL/isa-bh2024-all.json",
+        file_path="MARS/test-data/ISA-BH2024-ALL/isa-bh2024-all.json",
         investigation_is_root=True,
     )
     exact_match_files = [
-        "../test-data/ISA-BH2024-ALL/cnv-seq-data-0.fastq",
-        "../test-data/ISA-BH2024-ALL/cnv-seq-data-1.fastq",
-        "../test-data/ISA-BH2024-ALL/cnv-seq-data-2.fastq",
-        "../test-data/ISA-BH2024-ALL/cnv-seq-data-3.fastq",
-        "../test-data/ISA-BH2024-ALL/metpro-analysis.txt",
-        "../test-data/ISA-BH2024-ALL/ms-data-metpro--1.mzml",
-        "../test-data/ISA-BH2024-ALL/ms-data-metpro--2.mzml",
-        "../test-data/ISA-BH2024-ALL/ms-data-metpro--3.mzml",
-        "../test-data/ISA-BH2024-ALL/ms-data-metpro--4.mzml",
-        "../test-data/ISA-BH2024-ALL/rna-seq-data-0.fastq",
-        "../test-data/ISA-BH2024-ALL/rna-seq-data-1.fastq",
-        "../test-data/ISA-BH2024-ALL/rna-seq-data-2.fastq",
-        "../test-data/ISA-BH2024-ALL/rna-seq-data-3.fastq",
+        "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-0.fastq",
+        "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-1.fastq",
+        "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-2.fastq",
+        "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-3.fastq",
+        "MARS/test-data/ISA-BH2024-ALL/metpro-analysis.txt",
+        "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--1.mzml",
+        "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--2.mzml",
+        "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--3.mzml",
+        "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--4.mzml",
+        "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-0.fastq",
+        "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-1.fastq",
+        "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-2.fastq",
+        "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-3.fastq",
     ]
 
     check_map = dict(
         {
             "metabolights": [
-                "../test-data/ISA-BH2024-ALL/metpro-analysis.txt",
-                "../test-data/ISA-BH2024-ALL/ms-data-metpro--1.mzml",
-                "../test-data/ISA-BH2024-ALL/ms-data-metpro--2.mzml",
-                "../test-data/ISA-BH2024-ALL/ms-data-metpro--3.mzml",
-                "../test-data/ISA-BH2024-ALL/ms-data-metpro--4.mzml",
+                "MARS/test-data/ISA-BH2024-ALL/metpro-analysis.txt",
+                "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--1.mzml",
+                "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--2.mzml",
+                "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--3.mzml",
+                "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--4.mzml",
             ],
             "arrayexpress": [
-                "../test-data/ISA-BH2024-ALL/rna-seq-data-0.fastq",
-                "../test-data/ISA-BH2024-ALL/rna-seq-data-1.fastq",
-                "../test-data/ISA-BH2024-ALL/rna-seq-data-2.fastq",
-                "../test-data/ISA-BH2024-ALL/rna-seq-data-3.fastq",
+                "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-0.fastq",
+                "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-1.fastq",
+                "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-2.fastq",
+                "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-3.fastq",
             ],
             "eva": [
-                "../test-data/ISA-BH2024-ALL/cnv-seq-data-0.fastq",
-                "../test-data/ISA-BH2024-ALL/cnv-seq-data-1.fastq",
-                "../test-data/ISA-BH2024-ALL/cnv-seq-data-2.fastq",
-                "../test-data/ISA-BH2024-ALL/cnv-seq-data-3.fastq",
+                "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-0.fastq",
+                "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-1.fastq",
+                "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-2.fastq",
+                "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-3.fastq",
             ],
         }
     )
@@ -361,7 +361,7 @@ def test_map_data_files_to_repositories():
         map_data_files_to_repositories(not_enough_files, isa_json)
 
     too_many_files = exact_match_files.copy()
-    one_too_many = "../test-data/ISA-BH2024-ALL/one-too-many.fastq"
+    one_too_many = "MARS/test-data/ISA-BH2024-ALL/one-too-many.fastq"
     too_many_files.append(one_too_many)
 
     result_maps = map_data_files_to_repositories(too_many_files, isa_json)
