@@ -41,6 +41,11 @@ class TargetRepository(str, Enum):
                         "development-data-submission-url",
                         fallback="webin2.ebi.ac.uk",
                     ),
+                    "EXTERNAL-REF-URL": config.get(
+                        "ena",
+                        "development-external-references-url",
+                        fallback="https://www.ebi.ac.uk/ena/browser/view/"
+                    )
                 },
                 "WEBIN": {
                     "SERVICE": config.get(
@@ -70,6 +75,11 @@ class TargetRepository(str, Enum):
                         "development-token-url",
                         fallback="https://www-test.ebi.ac.uk/metabolights/mars/ws3/auth/token",
                     ),
+                    "EXTERNAL-REF-URL": config.get(
+                        "metabolights",
+                        "development-external-references-url",
+                        fallback="https://wwwdev.ebi.ac.uk/metabolights/editor/"
+                    )
                 },
                 "BIOSAMPLES": {
                     "SERVICE": config.get(
@@ -101,6 +111,11 @@ class TargetRepository(str, Enum):
                         "development-data-submission-url",
                         fallback="webin2.ebi.ac.uk",
                     ),
+                    "EXTERNAL-REF-URL": config.get(
+                        "ena",
+                        "development-external-references-url",
+                        fallback="https://www.ebi.ac.uk/ena/browser/view/"
+                    )
                 },
                 "WEBIN": {
                     "SERVICE": config.get(
@@ -130,6 +145,11 @@ class TargetRepository(str, Enum):
                         "production-token-url",
                         fallback="https://www-test.ebi.ac.uk/metabolights/mars/ws3/auth/token",
                     ),
+                    "EXTERNAL-REF-URL": config.get(
+                        "metabolights",
+                        "development-external-references-url",
+                        fallback="https://www.ebi.ac.uk/metabolights/editor/"
+                    )
                 },
                 "BIOSAMPLES": {
                     "SERVICE": config.get(
