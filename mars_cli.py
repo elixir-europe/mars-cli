@@ -1,7 +1,7 @@
 import click
 from datetime import datetime
 from mars_lib.target_repo import TargetRepository
-from mars_lib.models.isa_json import IsaJson
+from mars_lib.models.isa_json import Investigation, IsaJson
 from mars_lib.submit import submission
 from mars_lib.credential import CredentialManager
 from mars_lib.logging import print_and_log, init_logging
@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import os
 from configparser import ConfigParser
+from typing import List
 
 # Load CLI configuration
 home_dir = (
@@ -41,7 +42,7 @@ urls = TargetRepository.get_repository_urls_from_config(config)
     help="Boolean indicating the usage of the development environment of the target repositories. If not present, the production instances will be used.",
 )
 @click.pass_context
-def cli(ctx, development):
+def cli(ctx: click.Context, development: bool):
     print_and_log("############# Welcome to the MARS CLI. #############")
     print_and_log(
         "Sensitive information might be dumped in the log files when setting the 'log_level' to DEBUG in the config file. Logging in debug mode should only be used for developing purpose a can implicate security issues if used in a production environment!",
@@ -124,22 +125,22 @@ def cli(ctx, development):
 )
 @click.pass_context
 def submit(
-    ctx,
-    webin_username,
-    metabolights_username,
-    metabolights_ftp_username,
-    credentials_file,
-    isa_json_file,
-    submit_to_biosamples,
-    submit_to_ena,
-    submit_to_metabolights,
-    investigation_is_root,
-    file_transfer,
-    output,
-    data_files,
+    ctx: click.Context,
+    webin_username: str,
+    metabolights_username: str,
+    metabolights_ftp_username: str,
+    credentials_file: click.File,
+    isa_json_file : click.File,
+    submit_to_biosamples: bool,
+    submit_to_ena: bool,
+    submit_to_metabolights: bool,
+    investigation_is_root: bool,
+    file_transfer: str,
+    output: str,
+    data_files: List[click.File],
 ):
     """Start a submission to the target repositories."""
-    target_repositories = []
+    target_repositories: List[str] = []
 
     if submit_to_biosamples:
         target_repositories.append(TargetRepository.BIOSAMPLES.value)
@@ -175,7 +176,7 @@ def submit(
 
 @cli.command()
 @click.pass_context
-def health_check(ctx):
+def health_check(ctx: click.Context):
     """Check the health of the target repositories."""
     print_and_log("Checking the health of the target repositories.")
 
@@ -218,7 +219,7 @@ def health_check(ctx):
     help="Boolean indicating if the investigation is the root of the ISA JSON. Set this to True if the ISA-JSON does not contain a 'investigation' field.",
 )
 @click.option("--validation-schema", default="{}", type=click.STRING, help="")
-def validate_isa_json(isa_json_file, investigation_is_root, validation_schema):
+def validate_isa_json(isa_json_file: str, investigation_is_root: bool, validation_schema: str):
     """Validate the ISA JSON file."""
     print_and_log(f"Validating {isa_json_file}.")
 
@@ -227,7 +228,7 @@ def validate_isa_json(isa_json_file, investigation_is_root, validation_schema):
             json_data = json.load(f)
 
         if investigation_is_root:
-            isa_json = IsaJson(investigation=isa_json_file.model_validate(json_data))
+            isa_json = IsaJson(investigation=Investigation.model_validate(json_data))
         else:
             isa_json = IsaJson.model_validate(json_data).investigation
         validation_schema = json.loads(validation_schema)

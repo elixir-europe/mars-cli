@@ -30,7 +30,7 @@ class FTPUploader:
         self.password = password
 
     @retry(exceptions=ftplib.all_errors, tries=3, delay=2, backoff=1.2, jitter=(1, 3))
-    def upload(self, file_paths: List[Path], target_location: str = "/") -> bool:
+    def upload(self, file_paths: list[Path], target_location: str = "/") -> bool:
         # Heuristic to set the expected timeout assuming 10Mb/s upload speed but no less than 30 sec
         # and no more than an hour
         max_file_size = max([os.path.getsize(f) for f in file_paths])

@@ -1,3 +1,4 @@
+from configparser import ConfigParser
 from enum import Enum
 
 
@@ -21,7 +22,7 @@ class TargetRepository(str, Enum):
 
     @classmethod
     def get_repository_urls_from_config(
-        cls, config
+        cls, config: ConfigParser
     ) -> dict[str, dict[str, dict[str, str]]]:
         return {
             "DEV": {

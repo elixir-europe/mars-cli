@@ -7,7 +7,7 @@ from pathlib import Path
 logger = logging.getLogger("MARS-CLI")
 
 
-def print_and_log(msg, level="info"):
+def print_and_log(msg: str, level: str = "info"):
     if level == "info":
         logger.info(msg)
     elif level == "warning":
