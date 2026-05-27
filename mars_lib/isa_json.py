@@ -495,7 +495,9 @@ def update_isa_json(isa_json: IsaJson, repo_response: RepositoryResponse) -> Isa
             else:
                 updated_assay = next(
                     filter(
-                        lambda assay: is_assay_for_target_repo(assay, target_repository),
+                        lambda assay: is_assay_for_target_repo(
+                            assay, target_repository
+                        ),
                         updated_study.assays,
                     ),
                     None,
@@ -520,10 +522,13 @@ def map_data_files_to_repositories(
     for assay in assays:
         target_repo_comment: Comment = detect_target_repo_comment(assay.comments)
         # This is an effect of everything being optional in the Comment model.
-        # Should we decide to make the value mandatory, this guard clause would not be necessary anymore.
+        # Should we decide to make the value mandatory, this guard clause
+        # would not be necessary anymore.
         if target_repo_comment.value is None:
             raise ValueError(
-                f"At least one assay in the ISA-JSON has no '{TARGET_REPO_KEY}' comment. Mapping not possible. Make sure all assays in the ISA-JSON have this comment!"
+                f"At least one assay in the ISA-JSON has no "
+                f"'{TARGET_REPO_KEY}' comment. Mapping not possible. "
+                f"Make sure all assays in the ISA-JSON have this comment!"
             )
         assay_data_files = [df.name for df in assay.dataFiles]
 
@@ -550,7 +555,11 @@ def map_data_files_to_repositories(
 
     [
         print_and_log(
-            msg=f"File '{rf['short_name']}' could not be mapped to any data file in the ISA-JSON. For this reason, it will be skipped during submission!",
+            msg=(
+                f"File '{rf['short_name']}' could not be mapped to any data "
+                f"file in the ISA-JSON. For this reason, it will be skipped "
+                f"during submission!"
+            ),
             level="warning",
         )
         for rf in remaining_files
