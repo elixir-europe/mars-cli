@@ -484,29 +484,24 @@ def update_isa_json(isa_json: IsaJson, repo_response: RepositoryResponse) -> Isa
 
             add_accession_to_data_file_node(updated_node, accession.value)
         else:
-            # Add study accession to study comments
             updated_study = apply_filter(study_filter, investigation.studies)
-
-            study_accession_comment: Comment = Comment(
+            accession_comment = Comment(
                 name=f"{target_repository}_{target_level}_accession",
                 value=accession.value,
             )
-            updated_study.comments.append(study_accession_comment)
 
-            # Add study accession to assay comments
-            updated_assay = next(
-                filter(
-                    lambda assay: is_assay_for_target_repo(assay, target_repository),
-                    updated_study.assays,
-                ),
-                None,
-            )
-            if updated_assay:
-                assay_accession_comment: Comment = Comment(
-                    name=f"{target_repository}_{target_level}_accession",
-                    value=accession.value,
+            if target_level == "study":
+                updated_study.comments.append(accession_comment)
+            else:
+                updated_assay = next(
+                    filter(
+                        lambda assay: is_assay_for_target_repo(assay, target_repository),
+                        updated_study.assays,
+                    ),
+                    None,
                 )
-                updated_assay.comments.append(assay_accession_comment)
+                if updated_assay:
+                    updated_assay.comments.append(accession_comment)
     isa_json.investigation = investigation
     return isa_json
 
