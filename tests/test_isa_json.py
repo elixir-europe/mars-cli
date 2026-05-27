@@ -245,7 +245,7 @@ def test_update_study_materials_with_accession_categories():
     )
 
 
-def test_update_assay_only_with_ena_study_accession_comment():
+def test_update_study_only_with_ena_study_accession_comment():
     json_path = "tests/fixtures/isa_jsons/1_after_biosamples.json"
     isa_json = load_isa_json(json_path, False)
     response_file_path = "tests/fixtures/mars_receipts/ena_success_response.json"
@@ -254,10 +254,10 @@ def test_update_assay_only_with_ena_study_accession_comment():
 
     updated_isa_json = update_isa_json(isa_json, ena_response)
     study_comments = updated_isa_json.investigation.studies[0].comments
-    accession_comments = [
-        comment for comment in study_comments if comment.name == "ena_study_accession"
-    ]
-    assert accession_comments == []
+    accession_comment = filter(
+        lambda x: x.name == "ena_study_accession", study_comments
+    )
+    assert next(accession_comment).value == ena_study_accession_number
 
     ena_assay = next(
         filter(
@@ -267,10 +267,10 @@ def test_update_assay_only_with_ena_study_accession_comment():
         None,
     )
     assay_comments = ena_assay.comments
-    accession_comment = filter(
-        lambda x: x.name == "ena_study_accession", assay_comments
-    )
-    assert next(accession_comment).value == ena_study_accession_number
+    accession_comments = [
+        comment for comment in assay_comments if comment.name == "ena_study_accession"
+    ]
+    assert accession_comments == []
 
 
 def test_update_datafile_comment_with_accession_comment_present():
