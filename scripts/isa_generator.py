@@ -40,34 +40,33 @@ def _md5_of_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def _get_first_assay(isa_obj: dict[str, Any]) -> dict[str, Any] | None:
+def _get_all_assays(isa_obj: dict[str, Any]) -> List[dict[str, Any]]:
     """
-    Navigate to investigation.studies[0].assays[0] (if present).
+    Return all assays found under investigation.studies[*].assays[*].
     """
     inv = isa_obj.get("investigation")
     if inv is None:
         inv = isa_obj
 
     if not isinstance(inv, dict):
-        return None
+        return []
 
     studies = inv.get("studies") or []
-    if not isinstance(studies, list) or not studies:
-        return None
+    if not isinstance(studies, list):
+        return []
 
-    first_study = studies[0]
-    if not isinstance(first_study, dict):
-        return None
+    assays: List[dict[str, Any]] = []
+    for study in studies:
+        if not isinstance(study, dict):
+            continue
 
-    assays = first_study.get("assays") or []
-    if not isinstance(assays, list) or not assays:
-        return None
+        study_assays = study.get("assays") or []
+        if not isinstance(study_assays, list):
+            continue
 
-    first_assay = assays[0]
-    if not isinstance(first_assay, dict):
-        return None
+        assays.extend(assay for assay in study_assays if isinstance(assay, dict))
 
-    return first_assay
+    return assays
 
 
 def _ensure_comment(comments: List[dict[str, Any]], name: str, value: str) -> None:
@@ -83,14 +82,14 @@ def _ensure_comment(comments: List[dict[str, Any]], name: str, value: str) -> No
 
 
 def _update_datafiles_with_generated_files(
-    assay: dict[str, Any],
+    assays: List[dict[str, Any]],
     data_dir: Path,
-    n_files: int,
+    n_files: int | None,
 ) -> List[Path]:
     """
-    For the first assay, update its dataFiles entries with newly generated .fastq.gz files.
+    Update assay dataFiles entries with newly generated .fastq.gz files.
 
-    Behaviour per dataFiles[i] (for i < n_files):
+    Behaviour per touched data file:
 
       - Generate a unique .fastq.gz file based on the existing 'name':
           e.g. ENA_TEST2.R2.fastq.gz -> ENA_TEST2.R2_<suffix>.fastq.gz
@@ -98,7 +97,7 @@ def _update_datafiles_with_generated_files(
 
       - Write a dummy FASTQ into that file and compute its MD5.
 
-      - Update the dataFiles[i] object:
+      - Update the dataFiles entry:
           * "name" = new file name
           * in "comments":
               - "file name"       -> new file name
@@ -107,50 +106,49 @@ def _update_datafiles_with_generated_files(
               - "checksum_method" -> "MD5"
             (existing "accession", "submission date", etc. are kept as-is)
     """
-    data_files_json = assay.get("dataFiles") or []
-    if not isinstance(data_files_json, list):
-        return []
-
     generated_paths: List[Path] = []
     suffix = _timestamp_suffix()
+    updated_count = 0
 
-    # We only touch up to n_files entries, and only those that look like objects
-    for i, df_json in enumerate(data_files_json):
-        if i >= n_files:
-            break
-        if not isinstance(df_json, dict):
+    for assay in assays:
+        data_files_json = assay.get("dataFiles") or []
+        if not isinstance(data_files_json, list):
             continue
 
-        original_name = df_json.get("name")
-        if not isinstance(original_name, str) or not original_name:
-            continue
+        for df_json in data_files_json:
+            if n_files is not None and updated_count >= n_files:
+                return generated_paths
+            if not isinstance(df_json, dict):
+                continue
 
-        # Build unique .fastq.gz name
-        if original_name.endswith(".fastq.gz"):
-            base = original_name[:-len(".fastq.gz")]
-            new_name = f"{base}_{suffix}.fastq.gz"
-        else:
-            new_name = f"{original_name}_{suffix}.fastq.gz"
+            original_name = df_json.get("name")
+            if not isinstance(original_name, str) or not original_name:
+                continue
 
-        file_path = data_dir / new_name
-        _write_dummy_fastq_gz(file_path)
-        md5 = _md5_of_file(file_path)
+            if original_name.endswith(".fastq.gz"):
+                base = original_name[:-len(".fastq.gz")]
+                new_name = f"{base}_{suffix}.fastq.gz"
+            else:
+                new_name = f"{original_name}_{suffix}.fastq.gz"
 
-        # Update the JSON entry
-        df_json["name"] = new_name
+            file_path = data_dir / new_name
+            _write_dummy_fastq_gz(file_path)
+            md5 = _md5_of_file(file_path)
 
-        comments = df_json.get("comments")
-        if not isinstance(comments, list):
-            comments = []
-            df_json["comments"] = comments
+            df_json["name"] = new_name
 
-        _ensure_comment(comments, "file name", new_name)
-        _ensure_comment(comments, "file type", "fastq")
-        _ensure_comment(comments, "file checksum", md5)
-        _ensure_comment(comments, "checksum_method", "MD5")
-        # DO NOT touch 'accession' or 'submission date' if present
+            comments = df_json.get("comments")
+            if not isinstance(comments, list):
+                comments = []
+                df_json["comments"] = comments
 
-        generated_paths.append(file_path)
+            _ensure_comment(comments, "file name", new_name)
+            _ensure_comment(comments, "file type", "fastq")
+            _ensure_comment(comments, "file checksum", md5)
+            _ensure_comment(comments, "checksum_method", "MD5")
+
+            generated_paths.append(file_path)
+            updated_count += 1
 
     return generated_paths
 
@@ -158,15 +156,15 @@ def _update_datafiles_with_generated_files(
 def generate_isa_json_with_data(
     work_dir: Path,
     template_path: Path,
-    n_files: int = 2,
+    n_files: int | None = None,
 ) -> Tuple[Path, List[Path]]:
     """
     PoC behaviour:
 
       1. Load ISA-JSON template from template_path.
-      2. Find investigation.studies[0].assays[0].dataFiles.
-      3. For up to n_files entries in dataFiles, generate UNIQUE .fastq.gz files
-         and update:
+      2. Find all investigation.studies[*].assays[*].dataFiles.
+      3. For each data file (or the first n_files when limited), generate UNIQUE
+         .fastq.gz files and update:
            - dataFiles[i]["name"]
            - dataFiles[i]["comments"] entries for file name, type, checksum, method.
       4. Write the resulting ISA-JSON to work_dir / 'isa.json'.
@@ -177,12 +175,12 @@ def generate_isa_json_with_data(
 
     isa_obj = json.loads(template_path.read_text())
 
-    assay = _get_first_assay(isa_obj)
+    assays = _get_all_assays(isa_obj)
     generated_paths: List[Path] = []
-    if assay is not None:
+    if assays:
         data_dir = work_dir / "data"
         generated_paths = _update_datafiles_with_generated_files(
-            assay=assay,
+            assays=assays,
             data_dir=data_dir,
             n_files=n_files,
         )

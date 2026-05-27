@@ -125,7 +125,6 @@ def main() -> None:
     isa_path, data_files = generate_isa_json_with_data(
         work_dir=work_dir,
         template_path=isa_template,
-        n_files=2,
     )
 
     cred_path = write_credentials_json(work_dir)

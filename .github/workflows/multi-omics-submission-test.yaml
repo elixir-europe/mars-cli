@@ -17,7 +17,7 @@ jobs:
 
       # Paths for MARS repo and ISA template
       REPOSITORY_SERVICES_PATH: ${{ github.workspace }}/MARS/repository-services
-      ISA_TEMPLATE_PATH: ${{ github.workspace }}/MARS/test-data/biosamples-input-isa.json
+      ISA_TEMPLATE_PATH: ${{ github.workspace }}/MARS/test-data/biosamples-input-isa-multi.json
 
       # Credentials from GitHub secrets
       WEBIN_USERNAME: ${{ secrets.WEBIN_USERNAME }}
