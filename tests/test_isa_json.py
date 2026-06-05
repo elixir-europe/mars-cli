@@ -35,7 +35,10 @@ def test_load_isa_json():
     # Should test the validation process of the ISA JSON file where root has 'investigation' as key.
     valid_isa_json02 = load_isa_json("MARS/test-data/biosamples-input-isa.json", False)
     assert len(valid_isa_json02.investigation.studies) == 1
-    assert valid_isa_json02.investigation.studies[0].title == "Arabidopsis thaliana"
+    assert (
+        valid_isa_json02.investigation.studies[0].title
+        == "Integrated multi-omics profiling of Arabidopsis thaliana under controlled experimental conditions"
+    )
 
     with pytest.raises(ValidationError):
         load_isa_json("./tests/fixtures/invalid_investigation.json", True)
