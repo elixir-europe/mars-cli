@@ -248,6 +248,101 @@ def test_update_study_materials_with_accession_categories():
     )
 
 
+def test_update_study_materials_multiple_samples_from_one_source():
+    json_path = "MARS/test-data/biosamples-input-isa-multi.json"
+    with open(json_path) as json_file:
+        json_data = json.load(json_file)
+
+    study = json_data["investigation"]["studies"][0]
+    root_sample = next(
+        sample for sample in study["materials"]["samples"] if sample["name"] == "root 1"
+    )
+    root_sample["derivesFrom"][0]["@id"] = "#source/330"
+    root_process = next(
+        process
+        for process in study["processSequence"]
+        if process["@id"] == "#process/sample_collection/431"
+    )
+    root_process["inputs"][0]["@id"] = "#source/330"
+
+    validated_isa_json = IsaJson.model_validate(json_data)
+    repo_response = RepositoryResponse.model_validate(
+        {
+            "targetRepository": "biosamples",
+            "errors": [],
+            "info": [],
+            "accessions": [
+                {
+                    "value": "SAMEA_SOURCE_1",
+                    "path": [
+                        {"key": "investigation"},
+                        {
+                            "key": "studies",
+                            "where": {
+                                "key": "title",
+                                "value": study["title"],
+                            },
+                        },
+                        {"key": "materials"},
+                        {
+                            "key": "sources",
+                            "where": {"key": "name", "value": "plant 1"},
+                        },
+                    ],
+                },
+                {
+                    "value": "SAMEA_LEAF_1",
+                    "path": [
+                        {"key": "investigation"},
+                        {
+                            "key": "studies",
+                            "where": {
+                                "key": "title",
+                                "value": study["title"],
+                            },
+                        },
+                        {"key": "materials"},
+                        {
+                            "key": "samples",
+                            "where": {"key": "name", "value": "leaf 1"},
+                        },
+                    ],
+                },
+                {
+                    "value": "SAMEA_ROOT_1",
+                    "path": [
+                        {"key": "investigation"},
+                        {
+                            "key": "studies",
+                            "where": {
+                                "key": "title",
+                                "value": study["title"],
+                            },
+                        },
+                        {"key": "materials"},
+                        {
+                            "key": "samples",
+                            "where": {"key": "name", "value": "root 1"},
+                        },
+                    ],
+                },
+            ],
+        }
+    )
+
+    updated_isa_json = update_isa_json(validated_isa_json, repo_response)
+    updated_study = updated_isa_json.investigation.studies[0]
+    updated_samples = updated_study.materials.samples
+
+    assert updated_study.materials.sources[0].characteristics[-1].value.annotationValue == (
+        "SAMEA_SOURCE_1"
+    )
+    assert updated_samples[0].derivesFrom[0].id == "#source/330"
+    assert updated_samples[0].characteristics[-1].value.annotationValue == "SAMEA_LEAF_1"
+    assert updated_samples[1].derivesFrom[0].id == "#source/330"
+    assert updated_samples[1].characteristics[-1].value.annotationValue == "SAMEA_ROOT_1"
+
+
 def test_update_study_only_with_ena_study_accession_comment():
     json_path = "tests/fixtures/isa_jsons/1_after_biosamples.json"
     isa_json = load_isa_json(json_path, False)
