@@ -505,15 +505,6 @@
             }
           },
           {
-            "@id": "#characteristic_category/cell_type_321",
-            "characteristicType": {
-              "comments": [],
-              "annotationValue": "cell_type",
-              "termAccession": "",
-              "termSource": ""
-            }
-          },
-          {
             "@id": "#characteristic_category/dev_stage_322",
             "characteristicType": {
               "comments": [],
@@ -584,6 +575,38 @@
               "termAccession": "",
               "termSource": ""
             }
+          },
+          {
+            "@id": "#characteristic_category/genotype_330",
+            "characteristicType": {
+              "annotationValue": "genotype",
+              "termAccession": "",
+              "termSource": ""
+            }
+          },
+          {
+            "@id": "#characteristic_category/growth_condition_331",
+            "characteristicType": {
+              "annotationValue": "growth condition",
+              "termAccession": "",
+              "termSource": ""
+            }
+          },
+          {
+            "@id": "#characteristic_category/organism_part_332",
+            "characteristicType": {
+              "annotationValue": "organism part",
+              "termAccession": "",
+              "termSource": ""
+            }
+          },
+          {
+            "@id": "#characteristic_category/sample_description_333",
+            "characteristicType": {
+              "annotationValue": "sample description",
+              "termAccession": "",
+              "termSource": ""
+            }
           }
         ],
         "description": "Nucleic acid sequencing and metabolomics and proteomics of Arabidopsis thaliana in specific experimental conditions to test a specific hypothesis.\r\n",
@@ -647,23 +670,11 @@
                 {
                   "comments": [],
                   "category": {
-                    "@id": "#characteristic_category/cell_type_321"
-                  },
-                  "value": {
-                    "comments": [],
-                    "annotationValue": "na",
-                    "termAccession": "",
-                    "termSource": ""
-                  }
-                },
-                {
-                  "comments": [],
-                  "category": {
                     "@id": "#characteristic_category/dev_stage_322"
                   },
                   "value": {
                     "comments": [],
-                    "annotationValue": "budding",
+                    "annotationValue": "vegetative rosette stage",
                     "termAccession": "",
                     "termSource": ""
                   }
@@ -675,7 +686,7 @@
                   },
                   "value": {
                     "comments": [],
-                    "annotationValue": "01/01/2022",
+                    "annotationValue": "2022-01-01",
                     "termAccession": "",
                     "termSource": ""
                   }
@@ -687,7 +698,7 @@
                   },
                   "value": {
                     "comments": [],
-                    "annotationValue": "seed",
+                    "annotationValue": "whole plant",
                     "termAccession": "",
                     "termSource": ""
                   }
@@ -741,6 +752,26 @@
                   }
                 },
                 {
+                  "category": {
+                    "@id": "#characteristic_category/genotype_330"
+                  },
+                  "value": {
+                    "annotationValue": "Col-0",
+                    "termAccession": "",
+                    "termSource": ""
+                  }
+                },
+                {
+                  "category": {
+                    "@id": "#characteristic_category/growth_condition_331"
+                  },
+                  "value": {
+                    "annotationValue": "16 h light / 8 h dark growth chamber",
+                    "termAccession": "",
+                    "termSource": ""
+                  }
+                },
+                {
                   "comments": [],
                   "category": {
                     "@id": "#characteristic_category/accession_329",
@@ -783,6 +814,26 @@
                     "comments": [],
                     "@id": "#ontology_annotation/accession_#sample/331",
                     "annotationValue": "SAMEA131504584"
+                  }
+                },
+                {
+                  "category": {
+                    "@id": "#characteristic_category/organism_part_332"
+                  },
+                  "value": {
+                    "annotationValue": "leaf",
+                    "termAccession": "",
+                    "termSource": ""
+                  }
+                },
+                {
+                  "category": {
+                    "@id": "#characteristic_category/sample_description_333"
+                  },
+                  "value": {
+                    "annotationValue": "young rosette leaf collected for DNA extraction",
+                    "termAccession": "",
+                    "termSource": ""
                   }
                 }
               ],
@@ -859,7 +910,38 @@
                 "derivesFrom": []
               }
             ],
-            "parameterValues": [],
+            "parameterValues": [
+              {
+                "category": {
+                  "@id": "#parameter/sample_collection_isolation_source"
+                },
+                "value": {
+                  "annotationValue": "leaf tissue",
+                  "termAccession": "",
+                  "termSource": ""
+                }
+              },
+              {
+                "category": {
+                  "@id": "#parameter/sample_collection_method"
+                },
+                "value": {
+                  "annotationValue": "sterile scalpel excision",
+                  "termAccession": "",
+                  "termSource": ""
+                }
+              },
+              {
+                "category": {
+                  "@id": "#parameter/sample_collection_preservation"
+                },
+                "value": {
+                  "annotationValue": "flash frozen in liquid nitrogen",
+                  "termAccession": "",
+                  "termSource": ""
+                }
+              }
+            ],
             "performer": "",
             "previousProcess": {
               "comments": [],
@@ -886,7 +968,32 @@
             ],
             "description": "",
             "name": "sample collection",
-            "parameters": [],
+            "parameters": [
+              {
+                "@id": "#parameter/sample_collection_isolation_source",
+                "parameterName": {
+                  "annotationValue": "isolation_source",
+                  "termAccession": "",
+                  "termSource": ""
+                }
+              },
+              {
+                "@id": "#parameter/sample_collection_method",
+                "parameterName": {
+                  "annotationValue": "collection method",
+                  "termAccession": "",
+                  "termSource": ""
+                }
+              },
+              {
+                "@id": "#parameter/sample_collection_preservation",
+                "parameterName": {
+                  "annotationValue": "sample preservation",
+                  "termAccession": "",
+                  "termSource": ""
+                }
+              }
+            ],
             "protocolType": {
               "comments": [],
               "annotationValue": "sample collection",
