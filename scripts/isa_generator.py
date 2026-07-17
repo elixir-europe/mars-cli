@@ -125,11 +125,16 @@ def _update_datafiles_with_generated_files(
             if not isinstance(original_name, str) or not original_name:
                 continue
 
-            if original_name.endswith(".fastq.gz"):
-                base = original_name[:-len(".fastq.gz")]
+            # ISA data file names can include a relative directory (HoloFood uses
+            # FILES/RAW_FILES/...). Upload mapping is filename-based, so generated
+            # PoC files and their ISA names must use only the basename.
+            original_basename = original_name.replace("\\", "/").rsplit("/", 1)[-1]
+
+            if original_basename.endswith(".fastq.gz"):
+                base = original_basename[: -len(".fastq.gz")]
                 new_name = f"{base}_{suffix}.fastq.gz"
             else:
-                new_name = f"{original_name}_{suffix}.fastq.gz"
+                new_name = f"{original_basename}_{suffix}.fastq.gz"
 
             file_path = data_dir / new_name
             _write_dummy_fastq_gz(file_path)
