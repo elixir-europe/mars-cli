@@ -4,8 +4,8 @@ Prepare the PoC environments for MARS-CLI (no pytest, no run script):
 
 - Ensure settings.ini exists in $MARS_SETTINGS_DIR/.mars, or ~/.mars
 - Generate an ISA-JSON from each configured template, where:
-    * dataFiles entries in the first assay are updated to point to
-      UNIQUE .fastq.gz files
+    * dataFiles entries are updated to point to UNIQUE generated files while
+      preserving their original extensions
     * 'file name', 'file type', 'file checksum', 'checksum_method'
       comments are updated accordingly (MD5 over the .fastq.gz)
 - Create poc_work/credentials.json from environment variables

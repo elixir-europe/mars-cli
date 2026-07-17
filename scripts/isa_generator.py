@@ -14,19 +14,29 @@ def _timestamp_suffix() -> str:
     return datetime.now(UTC).strftime("%Y%m%d%H%M%S") + "_" + uuid.uuid4().hex[:6]
 
 
-def _write_dummy_fastq_gz(path: Path) -> None:
-    """
-    Write a tiny dummy FASTQ dataset into a .fastq.gz file.
-    Content doesn't matter, as long as it's valid-ish FASTQ text.
-    """
+def _write_dummy_data_file(path: Path) -> None:
+    """Write a tiny dummy file, using gzip for compressed FASTQ extensions."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with gzip.open(path, "wt") as fh:
-        fh.write(
-            "@read1\n"
-            "ACGTACGTACGTACGT\n"
-            "+\n"
-            "FFFFFFFFFFFFFFFF\n"
-        )
+    content = "@read1\nACGTACGTACGTACGT\n+\nFFFFFFFFFFFFFFFF\n"
+    if path.name.lower().endswith((".fastq.gz", ".fq.gz")):
+        with gzip.open(path, "wt") as fh:
+            fh.write(content)
+    else:
+        path.write_text(content)
+
+
+def _add_suffix_before_extension(file_name: str, suffix: str) -> str:
+    """Insert a unique suffix while preserving the original file extension."""
+    lower_name = file_name.lower()
+    for compound_extension in (".fastq.gz", ".fq.gz"):
+        if lower_name.endswith(compound_extension):
+            extension = file_name[-len(compound_extension) :]
+            return f"{file_name[:-len(compound_extension)]}_{suffix}{extension}"
+
+    extension = Path(file_name).suffix
+    if extension:
+        return f"{file_name[:-len(extension)]}_{suffix}{extension}"
+    return f"{file_name}_{suffix}"
 
 
 def _md5_of_file(path: Path) -> str:
@@ -87,13 +97,14 @@ def _update_datafiles_with_generated_files(
     n_files: int | None,
 ) -> List[Path]:
     """
-    Update assay dataFiles entries with newly generated .fastq.gz files.
+    Update assay dataFiles entries with newly generated files.
 
     Behaviour per touched data file:
 
-      - Generate a unique .fastq.gz file based on the existing 'name':
-          e.g. ENA_TEST2.R2.fastq.gz -> ENA_TEST2.R2_<suffix>.fastq.gz
-        (if name doesn't end with .fastq.gz, just append _<suffix>.fastq.gz)
+      - Generate a unique file based on the existing 'name' while preserving
+        its extension, for example:
+          ENA_TEST2.R2.fastq.gz -> ENA_TEST2.R2_<suffix>.fastq.gz
+          reads.R1.fq.gz         -> reads.R1_<suffix>.fq.gz
 
       - Write a dummy FASTQ into that file and compute its MD5.
 
@@ -101,8 +112,8 @@ def _update_datafiles_with_generated_files(
           * "name" = new file name
           * in "comments":
               - "file name"       -> new file name
-              - "file type"       -> "fastq"
-              - "file checksum"   -> MD5 of the .fastq.gz
+              - "file type"       -> the preserved extension
+              - "file checksum"   -> MD5 of the generated file
               - "checksum_method" -> "MD5"
             (existing "accession", "submission date", etc. are kept as-is)
     """
@@ -130,14 +141,10 @@ def _update_datafiles_with_generated_files(
             # PoC files and their ISA names must use only the basename.
             original_basename = original_name.replace("\\", "/").rsplit("/", 1)[-1]
 
-            if original_basename.endswith(".fastq.gz"):
-                base = original_basename[: -len(".fastq.gz")]
-                new_name = f"{base}_{suffix}.fastq.gz"
-            else:
-                new_name = f"{original_basename}_{suffix}.fastq.gz"
+            new_name = _add_suffix_before_extension(original_basename, suffix)
 
             file_path = data_dir / new_name
-            _write_dummy_fastq_gz(file_path)
+            _write_dummy_data_file(file_path)
             md5 = _md5_of_file(file_path)
 
             df_json["name"] = new_name
@@ -148,7 +155,12 @@ def _update_datafiles_with_generated_files(
                 df_json["comments"] = comments
 
             _ensure_comment(comments, "file name", new_name)
-            _ensure_comment(comments, "file type", "fastq")
+            file_type = (
+                "fastq"
+                if new_name.lower().endswith((".fastq.gz", ".fq.gz"))
+                else Path(new_name).suffix.lstrip(".") or "data"
+            )
+            _ensure_comment(comments, "file type", file_type)
             _ensure_comment(comments, "file checksum", md5)
             _ensure_comment(comments, "checksum_method", "MD5")
 
@@ -169,7 +181,7 @@ def generate_isa_json_with_data(
       1. Load ISA-JSON template from template_path.
       2. Find all investigation.studies[*].assays[*].dataFiles.
       3. For each data file (or the first n_files when limited), generate UNIQUE
-         .fastq.gz files and update:
+         files with preserved extensions and update:
            - dataFiles[i]["name"]
            - dataFiles[i]["comments"] entries for file name, type, checksum, method.
       4. Write the resulting ISA-JSON to work_dir / 'isa.json'.

@@ -83,7 +83,7 @@ jobs:
           set -euo pipefail
 
           DATA_ARGS=()
-          for data_file in poc_work/multi-omics/data/*.fastq.gz; do
+          for data_file in poc_work/multi-omics/data/*; do
             DATA_ARGS+=( --data-files "$data_file" )
           done
 
@@ -100,7 +100,7 @@ jobs:
           set -euo pipefail
 
           DATA_ARGS=()
-          for data_file in poc_work/holofood/data/*.fastq.gz; do
+          for data_file in poc_work/holofood/data/*; do
             DATA_ARGS+=( --data-files "$data_file" )
           done
 
