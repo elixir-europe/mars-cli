@@ -15,9 +15,10 @@ jobs:
       # Where mars-cli will put .mars/
       MARS_SETTINGS_DIR: ${{ github.workspace }}/mars_settings
 
-      # Paths for MARS repo and ISA template
+      # Paths for MARS repo and ISA templates
       REPOSITORY_SERVICES_PATH: ${{ github.workspace }}/MARS/repository-services
-      ISA_TEMPLATE_PATH: ${{ github.workspace }}/MARS/test-data/biosamples-input-isa.json
+      ISA_TEMPLATE_PATH: ${{ github.workspace }}/MARS/test-data/biosamples-input-isa-multi.json
+      HOLOFOOD_ISA_TEMPLATE_PATH: ${{ github.workspace }}/MARS/test-data/HoloFoodinISA_v1.0.json
 
       # Credentials from GitHub secrets
       WEBIN_USERNAME: ${{ secrets.WEBIN_USERNAME }}
@@ -73,30 +74,43 @@ jobs:
           echo "Services did not become healthy in time ❌"
           exit 1
 
-      - name: Prepare PoC - settings, ISA JSON, credentials, dataFiles
+      - name: Prepare PoC - settings, ISA JSONs, credentials, dataFiles
         run: |
           python scripts/prepare_poc_submission.py
 
-      - name: Run mars-cli submit
+      - name: Submit multi-omics ISA JSON
         run: |
           set -euo pipefail
 
-          # Build list of --data-files arguments from generated .fastq.gz files
           DATA_ARGS=()
-          for f in poc_work/data/*.fastq.gz; do
-            echo "Using data file: ./$f"
-            DATA_ARGS+=( --data-files "./$f" )
+          for data_file in poc_work/multi-omics/data/*; do
+            DATA_ARGS+=( --data-files "$data_file" )
           done
-
-          echo "Running mars-cli with data args: $DATA_ARGS"
 
           mars-cli --development submit \
             --submit-to-metabolights False \
             --file-transfer ftp \
-            --output "output_${{ github.run_id }}_${{ github.run_attempt }}.json" \
+            --output "output_multi_omics_${{ github.run_id }}_${{ github.run_attempt }}" \
             "${DATA_ARGS[@]}" \
             --credentials-file ./poc_work/credentials.json \
-            ./poc_work/isa.json
+            poc_work/multi-omics/isa.json
+
+      - name: Submit HoloFood ISA JSON
+        run: |
+          set -euo pipefail
+
+          DATA_ARGS=()
+          for data_file in poc_work/holofood/data/*; do
+            DATA_ARGS+=( --data-files "$data_file" )
+          done
+
+          mars-cli --development submit \
+            --submit-to-metabolights False \
+            --file-transfer ftp \
+            --output "output_holofood_${{ github.run_id }}_${{ github.run_attempt }}" \
+            "${DATA_ARGS[@]}" \
+            --credentials-file ./poc_work/credentials.json \
+            poc_work/holofood/isa.json
 
       - name: Collect repository-service logs
         if: always()

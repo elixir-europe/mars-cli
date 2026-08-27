@@ -484,29 +484,26 @@ def update_isa_json(isa_json: IsaJson, repo_response: RepositoryResponse) -> Isa
 
             add_accession_to_data_file_node(updated_node, accession.value)
         else:
-            # Add study accession to study comments
             updated_study = apply_filter(study_filter, investigation.studies)
-
-            study_accession_comment: Comment = Comment(
+            accession_comment = Comment(
                 name=f"{target_repository}_{target_level}_accession",
                 value=accession.value,
             )
-            updated_study.comments.append(study_accession_comment)
 
-            # Add study accession to assay comments
-            updated_assay = next(
-                filter(
-                    lambda assay: is_assay_for_target_repo(assay, target_repository),
-                    updated_study.assays,
-                ),
-                None,
-            )
-            if updated_assay:
-                assay_accession_comment: Comment = Comment(
-                    name=f"{target_repository}_{target_level}_accession",
-                    value=accession.value,
+            if target_level == "study":
+                updated_study.comments.append(accession_comment)
+            else:
+                updated_assay = next(
+                    filter(
+                        lambda assay: is_assay_for_target_repo(
+                            assay, target_repository
+                        ),
+                        updated_study.assays,
+                    ),
+                    None,
                 )
-                updated_assay.comments.append(assay_accession_comment)
+                if updated_assay:
+                    updated_assay.comments.append(accession_comment)
     isa_json.investigation = investigation
     return isa_json
 
@@ -525,10 +522,13 @@ def map_data_files_to_repositories(
     for assay in assays:
         target_repo_comment: Comment = detect_target_repo_comment(assay.comments)
         # This is an effect of everything being optional in the Comment model.
-        # Should we decide to make the value mandatory, this guard clause would not be necessary anymore.
+        # Should we decide to make the value mandatory, this guard clause
+        # would not be necessary anymore.
         if target_repo_comment.value is None:
             raise ValueError(
-                f"At least one assay in the ISA-JSON has no '{TARGET_REPO_KEY}' comment. Mapping not possible. Make sure all assays in the ISA-JSON have this comment!"
+                f"At least one assay in the ISA-JSON has no "
+                f"'{TARGET_REPO_KEY}' comment. Mapping not possible. "
+                f"Make sure all assays in the ISA-JSON have this comment!"
             )
         assay_data_files = [df.name for df in assay.dataFiles]
 
@@ -555,7 +555,11 @@ def map_data_files_to_repositories(
 
     [
         print_and_log(
-            msg=f"File '{rf['short_name']}' could not be mapped to any data file in the ISA-JSON. For this reason, it will be skipped during submission!",
+            msg=(
+                f"File '{rf['short_name']}' could not be mapped to any data "
+                f"file in the ISA-JSON. For this reason, it will be skipped "
+                f"during submission!"
+            ),
             level="warning",
         )
         for rf in remaining_files

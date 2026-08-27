@@ -404,5 +404,3 @@ python mars_cli.py --credential-service-name metabolights  --username-credential
 
 [To set up and run the MARS tool locally using Docker, follow these steps](../repository-services/README.md)
 
-
-

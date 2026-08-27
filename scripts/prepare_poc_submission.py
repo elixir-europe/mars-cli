@@ -1,21 +1,23 @@
 #!/usr/bin/env python
 """
-Prepare a PoC environment for MARS-CLI (no pytest, no run script):
+Prepare the PoC environments for MARS-CLI (no pytest, no run script):
 
 - Ensure settings.ini exists in $MARS_SETTINGS_DIR/.mars, or ~/.mars
-- Generate an ISA-JSON from a template, where:
-    * dataFiles entries in the first assay are updated to point to
-      UNIQUE .fastq.gz files
+- Generate an ISA-JSON from each configured template, where:
+    * dataFiles entries are updated to point to UNIQUE generated files while
+      preserving their original extensions
     * 'file name', 'file type', 'file checksum', 'checksum_method'
       comments are updated accordingly (MD5 over the .fastq.gz)
 - Create poc_work/credentials.json from environment variables
 
-The GitHub Action (or you, locally) will then call mars_cli.py directly using:
+Set ``HOLOFOOD_ISA_TEMPLATE_PATH`` to prepare the additional HoloFood
+submission alongside ``ISA_TEMPLATE_PATH``.
 
-  ISA JSON:        poc_work/isa.json
+The GitHub Action (or you, locally) will then call mars-cli using:
+
+  ISA JSON:        poc_work/<submission>/isa.json
   Credentials:     poc_work/credentials.json
-  Data files:      whatever generate_isa_json_with_data() returned
-                   (typically poc_work/data/*.fastq.gz)
+  Data files:      poc_work/<submission>/data/*.fastq.gz
 """
 
 
@@ -120,23 +122,34 @@ def main() -> None:
     work_dir = PROJECT_ROOT / "poc_work"
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    isa_template = resolve_isa_template()
+    isa_templates = {"multi-omics": resolve_isa_template()}
+    holofood_template = os.environ.get("HOLOFOOD_ISA_TEMPLATE_PATH")
+    if holofood_template:
+        holofood_path = Path(holofood_template)
+        if not holofood_path.exists():
+            raise FileNotFoundError(f"HoloFood ISA template not found at {holofood_path}")
+        isa_templates["holofood"] = holofood_path
 
-    isa_path, data_files = generate_isa_json_with_data(
-        work_dir=work_dir,
-        template_path=isa_template,
-        n_files=2,
-    )
+    prepared_submissions = []
+    for submission_name, isa_template in isa_templates.items():
+        submission_dir = work_dir / submission_name
+        isa_path, data_files = generate_isa_json_with_data(
+            work_dir=submission_dir,
+            template_path=isa_template,
+        )
+        prepared_submissions.append((isa_template, isa_path, data_files))
 
     cred_path = write_credentials_json(work_dir)
 
     print(f"[MARS-POC] settings.ini:    {settings_path}")
     print(f"[MARS-POC] work dir:        {work_dir}")
-    print(f"[MARS-POC] ISA JSON file:   {isa_path}")
     print(f"[MARS-POC] credentials:     {cred_path}")
-    print(f"[MARS-POC] data files:")
-    for df in data_files:
-        print(f"  - {df}")
+    for isa_template, isa_path, data_files in prepared_submissions:
+        print(f"[MARS-POC] template:        {isa_template}")
+        print(f"[MARS-POC] ISA JSON file:   {isa_path}")
+        print("[MARS-POC] data files:")
+        for data_file in data_files:
+            print(f"  - {data_file}")
 
 
 if __name__ == "__main__":
