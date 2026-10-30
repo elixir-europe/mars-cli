@@ -32,8 +32,7 @@ def test_load_isa_json():
     assert len(valid_isa_json01.investigation.studies) == 1
     assert valid_isa_json01.investigation.studies[0].identifier == "BH2023"
 
-    # Should test the validation process of the ISA JSON file where root has 'investigation' as key.
-    valid_isa_json02 = load_isa_json("MARS/test-data/biosamples-input-isa.json", False)
+    valid_isa_json02 = load_isa_json("MARS/test-data/biosamples-input-isa.json", True)
     assert len(valid_isa_json02.investigation.studies) == 1
     assert (
         valid_isa_json02.investigation.studies[0].title
@@ -187,7 +186,7 @@ def test_update_study_materials_no_accession_categories():
     with open(json_path) as json_file:
         json_data = json.load(json_file)
 
-    validated_isa_json = IsaJson.model_validate(json_data)
+    validated_isa_json = IsaJson(investigation=Investigation.model_validate(json_data))
 
     response_file_path = "tests/fixtures/mars_receipts/biosamples_success_response.json"
     repo_response = RepositoryResponse.from_json_file(response_file_path)
@@ -221,7 +220,7 @@ def test_update_study_materials_with_accession_categories():
     with open(json_path) as json_file:
         json_data = json.load(json_file)
 
-    validated_isa_json = IsaJson.model_validate(json_data)
+    validated_isa_json = IsaJson(investigation=Investigation.model_validate(json_data))
 
     response_file_path = "tests/fixtures/mars_receipts/biosamples_success_response.json"
     repo_response = RepositoryResponse.from_json_file(response_file_path)
@@ -253,7 +252,7 @@ def test_update_study_materials_multiple_samples_from_one_source():
     with open(json_path) as json_file:
         json_data = json.load(json_file)
 
-    study = json_data["investigation"]["studies"][0]
+    study = json_data["studies"][0]
     root_sample = next(
         sample for sample in study["materials"]["samples"] if sample["name"] == "root 1"
     )
@@ -265,7 +264,7 @@ def test_update_study_materials_multiple_samples_from_one_source():
     )
     root_process["inputs"][0]["@id"] = "#source/330"
 
-    validated_isa_json = IsaJson.model_validate(json_data)
+    validated_isa_json = IsaJson(investigation=Investigation.model_validate(json_data))
     repo_response = RepositoryResponse.model_validate(
         {
             "targetRepository": "biosamples",
@@ -334,13 +333,17 @@ def test_update_study_materials_multiple_samples_from_one_source():
     updated_study = updated_isa_json.investigation.studies[0]
     updated_samples = updated_study.materials.samples
 
-    assert updated_study.materials.sources[0].characteristics[-1].value.annotationValue == (
-        "SAMEA_SOURCE_1"
-    )
+    assert updated_study.materials.sources[0].characteristics[
+        -1
+    ].value.annotationValue == ("SAMEA_SOURCE_1")
     assert updated_samples[0].derivesFrom[0].id == "#source/330"
-    assert updated_samples[0].characteristics[-1].value.annotationValue == "SAMEA_LEAF_1"
+    assert (
+        updated_samples[0].characteristics[-1].value.annotationValue == "SAMEA_LEAF_1"
+    )
     assert updated_samples[1].derivesFrom[0].id == "#source/330"
-    assert updated_samples[1].characteristics[-1].value.annotationValue == "SAMEA_ROOT_1"
+    assert (
+        updated_samples[1].characteristics[-1].value.annotationValue == "SAMEA_ROOT_1"
+    )
 
 
 def test_update_study_only_with_ena_study_accession_comment():

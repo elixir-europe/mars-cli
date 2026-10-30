@@ -1,0 +1,50 @@
+[project]
+name = "mars"
+version = "0.2.0"
+description = "Multi-omics Adapter for Repository Submissions"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11, <4"
+dependencies = [
+    "requests",
+    "jsonschema",
+    "keyring",
+    "pydantic",
+    "click",
+    "retry",
+    "colorlog",
+]
+
+[project.urls]
+Source = "https://github.com/elixir-europe/MARS"
+"Bug Reports" = "https://github.com/elixir-europe/MARS/issues"
+
+[project.scripts]
+mars-cli = "mars_cli:cli"
+
+[dependency-groups]
+dev = [
+    "black == 25.1.*",
+    "ruff",
+    "pytest",
+    "pytest-cov",
+    "mypy",
+    "types-requests",
+    "types-retry",
+    "types-jsonschema",
+    "keyrings.alt",
+]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["mars_cli"]
+
+[tool.setuptools.packages.find]
+include = ["mars_lib", "mars_lib.*"]
+
+[tool.ruff.lint]
+# Keep the rule set the project was linted with before ruff widened its defaults
+select = ["E4", "E7", "E9", "F"]

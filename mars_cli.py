@@ -1,17 +1,19 @@
-import click
-from datetime import datetime
-from mars_lib.target_repo import TargetRepository
-from mars_lib.models.isa_json import IsaJson
-from mars_lib.submit import submission
-from mars_lib.credential import CredentialManager
-from mars_lib.logging import print_and_log, init_logging
-from mars_lib.validation import validate, CustomValidationException
-import requests
-import sys
-import json
-from pathlib import Path
 import os
+import sys
 from configparser import ConfigParser
+from datetime import datetime
+from pathlib import Path
+
+import click
+from pydantic_core import ValidationError
+import requests
+
+from mars_lib.credential import CredentialManager
+from mars_lib.isa_json import load_isa_json
+from mars_lib.logging import init_logging, print_and_log
+from mars_lib.settings import generate_config
+from mars_lib.submit import submission
+from mars_lib.target_repo import TargetRepository
 
 # Load CLI configuration
 home_dir = (
@@ -22,6 +24,9 @@ home_dir = (
 
 config_file = home_dir / ".mars" / "settings.ini"
 fallback_log_file = home_dir / ".mars" / "app.log"
+
+# Create a default settings file on first run
+generate_config(home_dir / ".mars")
 
 config = ConfigParser()
 config.read(config_file)
@@ -113,9 +118,9 @@ def cli(ctx, development):
 )
 @click.option(
     "--investigation-is-root",
-    default=False,
+    default=True,
     type=click.BOOL,
-    help="Boolean indicating if the investigation is the root of the ISA JSON. Set this to True if the ISA-JSON does not contain a 'investigation' field.",
+    help="Boolean indicating if the investigation is the root of the ISA JSON. Defaults to True. Set this to False if the ISA-JSON contains an 'investigation' field at the root level.",
 )
 @click.option(
     "--output",
@@ -213,30 +218,25 @@ def health_check(ctx):
 )
 @click.option(
     "--investigation-is-root",
-    default=False,
+    default=True,
     type=click.BOOL,
-    help="Boolean indicating if the investigation is the root of the ISA JSON. Set this to True if the ISA-JSON does not contain a 'investigation' field.",
+    help="Boolean indicating if the investigation is the root of the ISA JSON. Defaults to True. Set this to False if the ISA-JSON contains an 'investigation' field at the root level.",
 )
-@click.option("--validation-schema", default="{}", type=click.STRING, help="")
-def validate_isa_json(isa_json_file, investigation_is_root, validation_schema):
+def validate_isa_json(isa_json_file, investigation_is_root):
     """Validate the ISA JSON file."""
     print_and_log(f"Validating {isa_json_file}.")
 
     try:
-        with open(isa_json_file) as f:
-            json_data = json.load(f)
+        isa_json = load_isa_json(isa_json_file, investigation_is_root)
 
-        if investigation_is_root:
-            isa_json = IsaJson(investigation=isa_json_file.model_validate(json_data))
-        else:
-            isa_json = IsaJson.model_validate(json_data).investigation
-        validation_schema = json.loads(validation_schema)
-        isa_json = validate(isa_json, validation_schema)
-        print_and_log(f"ISA JSON with investigation '{isa_json.title}' is valid.")
-    except CustomValidationException as err:
+        if isinstance(isa_json, ValidationError):
+            raise ValidationError
+
+        print_and_log(
+            f"ISA JSON with investigation '{isa_json.investigation.title}' is valid."
+        )
+    except ValidationError as err:
         print_and_log(f"Validation errors occurred:\n{err}", level="error")
-    except Exception as err:
-        print_and_log(f"Unexpected error occurred:\n{err}", level="error")
 
 
 @cli.command()
