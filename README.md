@@ -200,9 +200,9 @@ Options:
   --output TEXT
   --investigation-is-root BOOLEAN
                                   Boolean indicating if the investigation is
-                                  the root of the ISA JSON. Set this to True
-                                  if the ISA-JSON does not contain a
-                                  'investigation' field.
+                                  the root of the ISA JSON. Defaults to True.
+                                  Set this to False if the ISA-JSON contains
+                                  an 'investigation' field at the root level.
   --submit-to-metabolights BOOLEAN
                                   Submit to Metabolights.
   --data-files FILENAME           Path of files to upload
@@ -303,12 +303,12 @@ Following command line will avoid submission to metabolights repository:
 mars-cli submit --submit-to-metabolights False my-credentials my-isa-json.json
 ```
 
-`--investigation-is-root`: By default this flag is set to false, meaning the ISA-JSON should have the `investigation`
-key at the root level. In case the root level __IS__ the investigation (`investigation` level is omitted), you need set
-the flag `--investigation-is-root` to `True` in order to validate the ISA-JSON.
+`--investigation-is-root`: By default this flag is set to true, meaning the root level of the ISA-JSON __IS__ the
+investigation. In case the ISA-JSON has the `investigation` key at the root level, you need to set the flag
+`--investigation-is-root` to `False` in order to validate the ISA-JSON.
 
 ```sh
-mars-cli submit --investigation-is-root True my-credentials my-isa-json.json
+mars-cli submit --investigation-is-root False my-credentials my-isa-json.json
 ```
 
 `--output`: By default "output_{datetime.now()}", the name of the isa final output.
@@ -336,14 +336,14 @@ This feature is implemented as a set of additional validation rules a user can c
 needs.
 
 ```sh
-mars-cli validate-isa-json --investigation-is-root True ../test-data/biosamples-input-isa.json
+mars-cli validate-isa-json --investigation-is-root False ../test-data/biosamples-input-isa.json
 ```
 
 ### Options
 
-`--investigation-is-root`: By default this flag is set to false, meaning the ISA-JSON should have the `investigation`
-key at the root level. In case the root level __IS__ the investigation (`investigation` level is omitted), you need set
-the flag `--investigation-is-root` to `True` in order to validate the ISA-JSON.
+`--investigation-is-root`: By default this flag is set to true, meaning the root level of the ISA-JSON __IS__ the
+investigation. In case the ISA-JSON has the `investigation` key at the root level, you need to set the flag
+`--investigation-is-root` to `False` in order to validate the ISA-JSON.
 
 ```sh
 mars-cli validate-isa-json my-isa-investigation.json
