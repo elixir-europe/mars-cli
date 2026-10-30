@@ -49,25 +49,19 @@ def create_settings_file(settings_dir):
         config.write(config_file)
 
 
-def generate_config(overwrite, mars_home_dir):
+def generate_config(settings_dir: pathlib.Path) -> None:
     """
-    Generate the configuration file for the MARS CLI.
+    Generate the configuration file for the MARS CLI, unless it already exists.
+
+    Args:
+        settings_dir (pathlib.Path): The '.mars' directory to store the settings file in.
 
     Returns:
         None
     """
-    settings_dir = (
-        pathlib.Path.home() / ".mars"
-        if mars_home_dir == "HOME"
-        else pathlib.Path(mars_home_dir) / ".mars"
-    )
+    settings_dir.mkdir(parents=True, exist_ok=True)
 
-    if not settings_dir.exists():
-        settings_dir.mkdir()
-
-    settings_path = settings_dir / "settings.ini"
-
-    if settings_path.exists() and not overwrite:
+    if (settings_dir / "settings.ini").exists():
         return
 
     create_settings_file(settings_dir)

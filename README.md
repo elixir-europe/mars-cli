@@ -47,25 +47,25 @@ MARS-CLI is not a platform to host data and will not store the data after submis
 
 This installation procedure describes a typical Linux installation. This application can perfectly work on Windows and MacOS but some of the steps might be different. 
 
-Installing the mars-cli from source:
+This project is managed with [uv](https://docs.astral.sh/uv/). Install uv first if you don't have it yet.
+
+Installing the mars-cli from source as a command line tool:
 
 ```sh
 cd mars-cli # Assuming you are in the root folder of this project
-pip install .
+uv tool install .
 ```
 
-If you want to install the optional testing dependencies as well, useful when contributing to the project:
+If you want to contribute to the project, set up a development environment with all testing dependencies instead:
 
 ```sh
-pip install .[test]
+uv sync
+uv run pytest
 ```
 
-If you want to overwrite the `settings.ini` file when reinstalling, you need to set the environmental variable `OVERWRITE_SETTINGS` to `True`:
+Commands like `uv run mars-cli --help`, `uv run black`, `uv run ruff` and `uv run mypy` then run inside that environment.
 
-```sh
-OVERWRITE_SETTINGS=True pip install .[test]
-```
-Installing the MARS-cli, will by default create a `.mars` directory in the home directory to store settings and log files.
+Running the MARS-cli for the first time will by default create a `.mars` directory in the home directory to store settings and log files.
 If you wish to create the `.mars` directory in another place, you must specify the `MARS_SETTINGS_DIR` variable and set it to the desired path:
 
 ```sh
@@ -84,7 +84,8 @@ Once installed, the CLI application will be available from the terminal.
 
 ## Configuration
 
-Installing this application will also generate a `settings.ini` file in `$HOME/.mars/`.
+Running this application for the first time will generate a `settings.ini` file in `$HOME/.mars/`.
+To regenerate the default settings, delete the `settings.ini` file and run the CLI again.
 
 ```
 [logging]

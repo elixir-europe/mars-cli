@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 from configparser import ConfigParser
@@ -12,9 +11,9 @@ import requests
 from mars_lib.credential import CredentialManager
 from mars_lib.isa_json import load_isa_json
 from mars_lib.logging import init_logging, print_and_log
+from mars_lib.settings import generate_config
 from mars_lib.submit import submission
 from mars_lib.target_repo import TargetRepository
-from mars_lib.validation import CustomValidationException, validate
 
 # Load CLI configuration
 home_dir = (
@@ -25,6 +24,9 @@ home_dir = (
 
 config_file = home_dir / ".mars" / "settings.ini"
 fallback_log_file = home_dir / ".mars" / "app.log"
+
+# Create a default settings file on first run
+generate_config(home_dir / ".mars")
 
 config = ConfigParser()
 config.read(config_file)
@@ -220,7 +222,6 @@ def health_check(ctx):
     type=click.BOOL,
     help="Boolean indicating if the investigation is the root of the ISA JSON. Defaults to True. Set this to False if the ISA-JSON contains an 'investigation' field at the root level.",
 )
-@click.option("--validation-schema", default="{}", type=click.STRING, help="")
 def validate_isa_json(isa_json_file, investigation_is_root):
     """Validate the ISA JSON file."""
     print_and_log(f"Validating {isa_json_file}.")

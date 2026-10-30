@@ -34,16 +34,16 @@ jobs:
         with:
           submodules: 'recursive'
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.13"
+          activate-environment: true
 
       - name: Install mars-cli
         run: |
           mkdir -p "${MARS_SETTINGS_DIR}"
-          pip install --upgrade pip
-          pip install .
+          uv sync --locked --no-dev
 
       - name: Start repository-services (docker compose up)
         working-directory: ${{ env.REPOSITORY_SERVICES_PATH }}
