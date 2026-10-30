@@ -337,7 +337,7 @@ This feature is implemented as a set of additional validation rules a user can c
 needs.
 
 ```sh
-mars-cli validate-isa-json --investigation-is-root False ../test-data/biosamples-input-isa.json
+mars-cli validate-isa-json ../test-data/biosamples-input-isa.json
 ```
 
 ### Options
