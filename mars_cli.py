@@ -230,7 +230,7 @@ def validate_isa_json(isa_json_file, investigation_is_root):
         isa_json = load_isa_json(isa_json_file, investigation_is_root)
 
         if isinstance(isa_json, ValidationError):
-          raise ValidationError
+            raise ValidationError
 
         print_and_log(
             f"ISA JSON with investigation '{isa_json.investigation.title}' is valid."

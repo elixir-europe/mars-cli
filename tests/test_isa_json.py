@@ -333,13 +333,17 @@ def test_update_study_materials_multiple_samples_from_one_source():
     updated_study = updated_isa_json.investigation.studies[0]
     updated_samples = updated_study.materials.samples
 
-    assert updated_study.materials.sources[0].characteristics[-1].value.annotationValue == (
-        "SAMEA_SOURCE_1"
-    )
+    assert updated_study.materials.sources[0].characteristics[
+        -1
+    ].value.annotationValue == ("SAMEA_SOURCE_1")
     assert updated_samples[0].derivesFrom[0].id == "#source/330"
-    assert updated_samples[0].characteristics[-1].value.annotationValue == "SAMEA_LEAF_1"
+    assert (
+        updated_samples[0].characteristics[-1].value.annotationValue == "SAMEA_LEAF_1"
+    )
     assert updated_samples[1].derivesFrom[0].id == "#source/330"
-    assert updated_samples[1].characteristics[-1].value.annotationValue == "SAMEA_ROOT_1"
+    assert (
+        updated_samples[1].characteristics[-1].value.annotationValue == "SAMEA_ROOT_1"
+    )
 
 
 def test_update_study_only_with_ena_study_accession_comment():
