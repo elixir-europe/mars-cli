@@ -11,9 +11,6 @@
       "value": "ERP167466",
       "path": [
         {
-          "key": "investigation"
-        },
-        {
           "key": "studies",
           "where": {
             "key": "title",
@@ -25,9 +22,6 @@
     {
       "value": "ERX13506397",
       "path": [
-        {
-          "key": "investigation"
-        },
         {
           "key": "studies",
           "where": {
@@ -58,9 +52,6 @@
       "value": "ERX13506398",
       "path": [
         {
-          "key": "investigation"
-        },
-        {
           "key": "studies",
           "where": {
             "key": "title",
@@ -89,9 +80,6 @@
     {
       "value": "ERR00000001",
       "path": [
-        {
-          "key": "investigation"
-        },
         {
           "key": "studies",
           "where": {

@@ -52,16 +52,9 @@ def _md5_of_file(path: Path) -> str:
 
 def _get_all_assays(isa_obj: dict[str, Any]) -> List[dict[str, Any]]:
     """
-    Return all assays found under investigation.studies[*].assays[*].
+    Return all assays found under studies[*].assays[*].
     """
-    inv = isa_obj.get("investigation")
-    if inv is None:
-        inv = isa_obj
-
-    if not isinstance(inv, dict):
-        return []
-
-    studies = inv.get("studies") or []
+    studies = isa_obj.get("studies") or []
     if not isinstance(studies, list):
         return []
 
@@ -179,7 +172,7 @@ def generate_isa_json_with_data(
     PoC behaviour:
 
       1. Load ISA-JSON template from template_path.
-      2. Find all investigation.studies[*].assays[*].dataFiles.
+      2. Find all studies[*].assays[*].dataFiles.
       3. For each data file (or the first n_files when limited), generate UNIQUE
          files with preserved extensions and update:
            - dataFiles[i]["name"]

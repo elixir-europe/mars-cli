@@ -16,7 +16,6 @@ from mars_lib.models.isa_json import (
     Material,
     Assay,
     Person,
-    IsaJson,
     Investigation,
     Study,
 )
@@ -26,50 +25,44 @@ import json
 
 def test_load_isa_json():
     # Should test the validation process of the ISA JSON file where root level = investigation.
-    valid_isa_json01 = load_isa_json(
-        "MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json", True
-    )
-    assert len(valid_isa_json01.investigation.studies) == 1
-    assert valid_isa_json01.investigation.studies[0].identifier == "BH2023"
+    valid_isa_json01 = load_isa_json("MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json")
+    assert len(valid_isa_json01.studies) == 1
+    assert valid_isa_json01.studies[0].identifier == "BH2023"
 
-    valid_isa_json02 = load_isa_json("MARS/test-data/biosamples-input-isa.json", True)
-    assert len(valid_isa_json02.investigation.studies) == 1
+    valid_isa_json02 = load_isa_json("MARS/test-data/biosamples-input-isa.json")
+    assert len(valid_isa_json02.studies) == 1
     assert (
-        valid_isa_json02.investigation.studies[0].title
+        valid_isa_json02.studies[0].title
         == "Integrated multi-omics profiling of Arabidopsis thaliana under controlled experimental conditions"
     )
 
     with pytest.raises(ValidationError):
-        load_isa_json("./tests/fixtures/invalid_investigation.json", True)
+        load_isa_json("./tests/fixtures/invalid_investigation.json")
 
 
 def test_reduce_isa_json_for_target_repo():
-    good_isa_json = load_isa_json(
-        "MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json", True
-    )
+    good_isa_json = load_isa_json("MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json")
 
     filtered_isa_json = reduce_isa_json_for_target_repo(
         good_isa_json, TargetRepository.ENA.value
     )
 
-    good_isa_json_study = good_isa_json.investigation.studies[0]
+    good_isa_json_study = good_isa_json.studies[0]
 
-    filtered_isa_json_study = filtered_isa_json.investigation.studies[0]
+    filtered_isa_json_study = filtered_isa_json.studies[0]
 
     assert len(good_isa_json_study.assays) == 5
     assert len(filtered_isa_json_study.assays) == 1
 
 
 def test_reduce_isa_json_for_biosamples():
-    good_isa_json = load_isa_json(
-        "MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json", True
-    )
+    good_isa_json = load_isa_json("MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json")
 
     filtered_isa_json = reduce_isa_json_for_target_repo(
         good_isa_json, TargetRepository.BIOSAMPLES.value
     )
 
-    assert len(filtered_isa_json.investigation.studies[0].assays) == 0
+    assert len(filtered_isa_json.studies[0].assays) == 0
 
 
 def test_data_type_validator():
@@ -186,7 +179,7 @@ def test_update_study_materials_no_accession_categories():
     with open(json_path) as json_file:
         json_data = json.load(json_file)
 
-    validated_isa_json = IsaJson(investigation=Investigation.model_validate(json_data))
+    validated_isa_json = Investigation.model_validate(json_data)
 
     response_file_path = "tests/fixtures/mars_receipts/biosamples_success_response.json"
     repo_response = RepositoryResponse.from_json_file(response_file_path)
@@ -196,7 +189,7 @@ def test_update_study_materials_no_accession_categories():
     # Check the accession number of the source
     source_accession = "SAMEA131504583"
     assert (
-        updated_isa_json.investigation.studies[0]
+        updated_isa_json.studies[0]
         .materials.sources[0]
         .characteristics[-1]
         .value.annotationValue
@@ -206,7 +199,7 @@ def test_update_study_materials_no_accession_categories():
     # Check the accession number of the sample
     sample_accession = "SAMEA131504584"
     assert (
-        updated_isa_json.investigation.studies[0]
+        updated_isa_json.studies[0]
         .materials.samples[0]
         .characteristics[-1]
         .value.annotationValue
@@ -220,7 +213,7 @@ def test_update_study_materials_with_accession_categories():
     with open(json_path) as json_file:
         json_data = json.load(json_file)
 
-    validated_isa_json = IsaJson(investigation=Investigation.model_validate(json_data))
+    validated_isa_json = Investigation.model_validate(json_data)
 
     response_file_path = "tests/fixtures/mars_receipts/biosamples_success_response.json"
     repo_response = RepositoryResponse.from_json_file(response_file_path)
@@ -229,7 +222,7 @@ def test_update_study_materials_with_accession_categories():
     # Check the accession number of the source
     source_accession = "SAMEA131504583"
     assert (
-        updated_isa_json.investigation.studies[0]
+        updated_isa_json.studies[0]
         .materials.sources[0]
         .characteristics[-1]
         .value.annotationValue
@@ -239,7 +232,7 @@ def test_update_study_materials_with_accession_categories():
     # Check the accession number of the sample
     sample_accession = "SAMEA131504584"
     assert (
-        updated_isa_json.investigation.studies[0]
+        updated_isa_json.studies[0]
         .materials.samples[0]
         .characteristics[-1]
         .value.annotationValue
@@ -264,7 +257,7 @@ def test_update_study_materials_multiple_samples_from_one_source():
     )
     root_process["inputs"][0]["@id"] = "#source/330"
 
-    validated_isa_json = IsaJson(investigation=Investigation.model_validate(json_data))
+    validated_isa_json = Investigation.model_validate(json_data)
     repo_response = RepositoryResponse.model_validate(
         {
             "targetRepository": "biosamples",
@@ -274,7 +267,6 @@ def test_update_study_materials_multiple_samples_from_one_source():
                 {
                     "value": "SAMEA_SOURCE_1",
                     "path": [
-                        {"key": "investigation"},
                         {
                             "key": "studies",
                             "where": {
@@ -292,7 +284,6 @@ def test_update_study_materials_multiple_samples_from_one_source():
                 {
                     "value": "SAMEA_LEAF_1",
                     "path": [
-                        {"key": "investigation"},
                         {
                             "key": "studies",
                             "where": {
@@ -310,7 +301,6 @@ def test_update_study_materials_multiple_samples_from_one_source():
                 {
                     "value": "SAMEA_ROOT_1",
                     "path": [
-                        {"key": "investigation"},
                         {
                             "key": "studies",
                             "where": {
@@ -330,7 +320,7 @@ def test_update_study_materials_multiple_samples_from_one_source():
     )
 
     updated_isa_json = update_isa_json(validated_isa_json, repo_response)
-    updated_study = updated_isa_json.investigation.studies[0]
+    updated_study = updated_isa_json.studies[0]
     updated_samples = updated_study.materials.samples
 
     assert updated_study.materials.sources[0].characteristics[
@@ -348,13 +338,13 @@ def test_update_study_materials_multiple_samples_from_one_source():
 
 def test_update_study_only_with_ena_study_accession_comment():
     json_path = "tests/fixtures/isa_jsons/1_after_biosamples.json"
-    isa_json = load_isa_json(json_path, False)
+    isa_json = load_isa_json(json_path)
     response_file_path = "tests/fixtures/mars_receipts/ena_success_response.json"
     ena_response = RepositoryResponse.from_json_file(response_file_path)
     ena_study_accession_number = "ERP167466"
 
     updated_isa_json = update_isa_json(isa_json, ena_response)
-    study_comments = updated_isa_json.investigation.studies[0].comments
+    study_comments = updated_isa_json.studies[0].comments
     accession_comment = filter(
         lambda x: x.name == "ena_study_accession", study_comments
     )
@@ -363,7 +353,7 @@ def test_update_study_only_with_ena_study_accession_comment():
     ena_assay = next(
         filter(
             lambda assay: is_assay_for_target_repo(assay, "ena"),
-            updated_isa_json.investigation.studies[0].assays,
+            updated_isa_json.studies[0].assays,
         ),
         None,
     )
@@ -376,14 +366,14 @@ def test_update_study_only_with_ena_study_accession_comment():
 
 def test_update_datafile_comment_with_accession_comment_present():
     json_path = "tests/fixtures/isa_jsons/1_after_biosamples.json"
-    isa_json = load_isa_json(json_path, False)
+    isa_json = load_isa_json(json_path)
     response_file_path = "tests/fixtures/mars_receipts/ena_success_response.json"
     ena_response = RepositoryResponse.from_json_file(response_file_path)
     data_file_accession_number = "ERR00000001"
 
     updated_isa_json = update_isa_json(isa_json, ena_response)
     data_file_comments = (
-        updated_isa_json.investigation.studies[0].assays[0].dataFiles[0].comments
+        updated_isa_json.studies[0].assays[0].dataFiles[0].comments
     )
     accession_comment = filter(lambda x: x.name == "accession", data_file_comments)
     assert next(accession_comment).value == data_file_accession_number
@@ -408,10 +398,7 @@ def test_filename_validation():
 
 
 def test_map_data_files_to_repositories():
-    isa_json = load_isa_json(
-        file_path="MARS/test-data/ISA-BH2024-ALL/isa-bh2024-all.json",
-        investigation_is_root=True,
-    )
+    isa_json = load_isa_json(file_path="MARS/test-data/ISA-BH2024-ALL/isa-bh2024-all.json")
     exact_match_files = [
         "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-0.fastq",
         "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-1.fastq",
