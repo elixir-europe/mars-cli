@@ -304,4 +304,3 @@ class Investigation(CommentedIsaBase):
             return v
         else:
             raise ValueError("'filename' should start with 'i_'")
-

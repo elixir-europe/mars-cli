@@ -25,7 +25,9 @@ import json
 
 def test_load_isa_json():
     # Should test the validation process of the ISA JSON file where root level = investigation.
-    valid_isa_json01 = load_isa_json("MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json")
+    valid_isa_json01 = load_isa_json(
+        "MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json"
+    )
     assert len(valid_isa_json01.studies) == 1
     assert valid_isa_json01.studies[0].identifier == "BH2023"
 
@@ -372,9 +374,7 @@ def test_update_datafile_comment_with_accession_comment_present():
     data_file_accession_number = "ERR00000001"
 
     updated_isa_json = update_isa_json(isa_json, ena_response)
-    data_file_comments = (
-        updated_isa_json.studies[0].assays[0].dataFiles[0].comments
-    )
+    data_file_comments = updated_isa_json.studies[0].assays[0].dataFiles[0].comments
     accession_comment = filter(lambda x: x.name == "accession", data_file_comments)
     assert next(accession_comment).value == data_file_accession_number
 
@@ -398,7 +398,9 @@ def test_filename_validation():
 
 
 def test_map_data_files_to_repositories():
-    isa_json = load_isa_json(file_path="MARS/test-data/ISA-BH2024-ALL/isa-bh2024-all.json")
+    isa_json = load_isa_json(
+        file_path="MARS/test-data/ISA-BH2024-ALL/isa-bh2024-all.json"
+    )
     exact_match_files = [
         "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-0.fastq",
         "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-1.fastq",

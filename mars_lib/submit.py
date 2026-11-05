@@ -89,9 +89,7 @@ def submission(
     if isinstance(isa_json, ValidationError):
         raise ValidationError(f"ISA JSON is invalid: {isa_json}")
 
-    print_and_log(
-        f"ISA JSON with investigation '{isa_json.title}' is valid."
-    )
+    print_and_log(f"ISA JSON with investigation '{isa_json.title}' is valid.")
 
     # create data file map
     data_file_map = map_data_files_to_repositories(
