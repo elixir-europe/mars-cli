@@ -171,7 +171,7 @@ class BiosamplesRecord:
         print("Biosamples External References:", self.biosamples_externalReferences)
         print("Production Mode:", self.production)
 
-    def fetch_bs_json(self, biosamples_endpoint: str) -> Optional[dict[str, str]]:
+    def fetch_bs_json(self, biosamples_endpoint: str) -> Optional[dict[str, Any]]:
         """
         Fetches the BioSample's record (JSON) of the accession.
 
@@ -210,8 +210,8 @@ class BiosamplesRecord:
         return self.bs_json
 
     def load_bs_json(
-        self, bs_json: Union[str, dict[str, str]]
-    ) -> Optional[dict[str, str]]:
+        self, bs_json: Union[str, dict[str, Any]]
+    ) -> Optional[dict[str, Any]]:
         """
         Loads a given JSON, or the file containing it, as the BioSample's record (JSON) for this instance.
             It is an alternative to fetching it directly from BioSample.
@@ -231,7 +231,7 @@ class BiosamplesRecord:
                 "Neither the file containing the Biosamples JSON nor the Biosamples JSON itself were given to load it into the instance."
             )
 
-    def pop_links(self) -> dict[str, str]:
+    def pop_links(self) -> dict[str, Any]:
         """
         Removes "_links" array (which is added automatically after updating the biosamples on the BioSample's side).
         """
@@ -243,7 +243,7 @@ class BiosamplesRecord:
 
     def extend_externalReferences(
         self, new_ext_refs_list: List[dict[str, str]]
-    ) -> dict[str, str]:
+    ) -> dict[str, Any]:
         """Extends the JSON of the BioSample's record with new externalReferences"""
         if not self.bs_json:
             endpoint = (

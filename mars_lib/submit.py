@@ -21,12 +21,12 @@ from mars_lib.biosamples_external_references import (
 )
 from mars_lib.credential import CredentialManager
 from mars_lib.isa_json import (
-    load_isa_json,
-    reduce_isa_json_for_target_repo,
-    update_isa_json,
+    load_investigation,
+    reduce_investigation_for_target_repo,
+    update_investigation,
     map_data_files_to_repositories,
 )
-from mars_lib.models.isa_json import Comment, IsaJson
+from mars_lib.models.isa_json import Comment, Investigation
 from mars_lib.models.repository_response import RepositoryResponse
 from mars_lib.target_repo import TargetRepository
 from mars_lib.logging import print_and_log
@@ -37,12 +37,12 @@ from pathlib import Path
 from typing import List
 
 
-def save_step_to_file(time_stamp: float, filename: str, isa_json: IsaJson):
+def save_step_to_file(time_stamp: float, filename: str, investigation: Investigation):
     dir_path = f"tmp/{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
     os.makedirs(dir_path, exist_ok=True)
 
     with open(f"{dir_path}/{filename}.json", "w") as f:
-        f.write(isa_json.model_dump_json(by_alias=True, exclude_none=True))
+        f.write(investigation.model_dump_json(by_alias=True, exclude_none=True))
 
 
 DEBUG = os.getenv("MARS_DEBUG") in ["1", 1]
@@ -55,7 +55,6 @@ def submission(
     credentials_file: TextIOWrapper,
     isa_json_file: str,
     target_repositories: list[str],
-    investigation_is_root: bool,
     urls: dict[str, Any],
     file_transfer: str,
     output: str,
@@ -84,25 +83,23 @@ def submission(
 
         user_credentials = load_credentials(credentials_file)
 
-    isa_json = load_isa_json(isa_json_file, investigation_is_root)
+    investigation = load_investigation(isa_json_file)
 
     # Guard clause to keep MyPy happy
-    if isinstance(isa_json, ValidationError):
-        raise ValidationError(f"ISA JSON is invalid: {isa_json}")
+    if isinstance(investigation, ValidationError):
+        raise ValidationError(f"ISA JSON is invalid: {investigation}")
 
-    print_and_log(
-        f"ISA JSON with investigation '{isa_json.investigation.title}' is valid."
-    )
+    print_and_log(f"ISA JSON with investigation '{investigation.title}' is valid.")
 
     # create data file map
     data_file_map = map_data_files_to_repositories(
-        files=[str(dfp) for dfp in data_file_paths], isa_json=isa_json
+        files=[str(dfp) for dfp in data_file_paths], investigation=investigation
     )
 
     time_stamp = datetime.timestamp(datetime.now())
 
     if DEBUG:
-        save_step_to_file(time_stamp, "0_Initial_ISA_JSON_in_model", isa_json)
+        save_step_to_file(time_stamp, "0_Initial_ISA_JSON_in_model", investigation)
 
     if all(
         repo not in TargetRepository.available_repositories()
@@ -113,7 +110,7 @@ def submission(
     if TargetRepository.BIOSAMPLES.value in target_repositories:
         # Submit to Biosamples
         biosamples_result = submit_to_biosamples(
-            isa_json=isa_json,
+            investigation=investigation,
             biosamples_credentials=user_credentials[AuthProvider.WEBIN.value],
             biosamples_url=urls["BIOSAMPLES"]["SUBMISSION"],
             webin_token_url=urls["WEBIN"]["TOKEN"],
@@ -122,13 +119,13 @@ def submission(
             f"Submission to {TargetRepository.BIOSAMPLES.value} was successful. Result:\n{biosamples_result.json()}",
             level="info",
         )
-        # Update `isa_json`, based on the receipt returned
+        # Update `investigation`, based on the receipt returned
         bs_mars_receipt = RepositoryResponse.model_validate(
             json.loads(biosamples_result.content)
         )
-        isa_json = update_isa_json(isa_json, bs_mars_receipt)
+        investigation = update_investigation(investigation, bs_mars_receipt)
         if DEBUG:
-            save_step_to_file(time_stamp, "1_after_biosamples", isa_json)
+            save_step_to_file(time_stamp, "1_after_biosamples", investigation)
 
     if TargetRepository.ENA.value in target_repositories:
         # Step 1 : upload data if file paths are provided
@@ -147,7 +144,7 @@ def submission(
 
         # Step 2 : submit isa-json to ena
         ena_result = submit_to_ena(
-            isa_json=isa_json,
+            investigation=investigation,
             user_credentials=user_credentials[AuthProvider.WEBIN.value],
             submission_url=urls["ENA"]["SUBMISSION"],
         )
@@ -162,16 +159,16 @@ def submission(
         ena_mars_receipt = RepositoryResponse.model_validate(
             json.loads(ena_result.content)
         )
-        isa_json = update_isa_json(isa_json, ena_mars_receipt)
+        investigation = update_investigation(investigation, ena_mars_receipt)
         if DEBUG:
-            save_step_to_file(time_stamp, "2_after_ena", isa_json)
+            save_step_to_file(time_stamp, "2_after_ena", investigation)
 
     if TargetRepository.METABOLIGHTS.value in target_repositories:
         # Submit to MetaboLights
         metabolights_result = upload_to_metabolights(
             file_paths=data_file_map[TargetRepository.METABOLIGHTS.value],
             file_transfer=file_transfer,
-            isa_json=isa_json,
+            investigation=investigation,
             metabolights_credentials=user_credentials[
                 AuthProvider.METABOLIGHTS_METADATA.value
             ],
@@ -187,14 +184,14 @@ def submission(
             metabolights_receipt_obj
         )
         # TODO: MetaboLights creates accession number with errors. Errors are not handled.
-        isa_json.investigation.studies[0].comments.append(
+        investigation.studies[0].comments.append(
             Comment(
                 name="metabolights_accession",
                 value=metabolights_receipt.accessions[0].value,
             )
         )
         if DEBUG:
-            save_step_to_file(time_stamp, "3_after_metabolights", isa_json)
+            save_step_to_file(time_stamp, "3_after_metabolights", investigation)
 
     if TargetRepository.EVA.value in target_repositories:
         # Submit to EVA
@@ -202,15 +199,15 @@ def submission(
         print_and_log(
             f"Submission to {TargetRepository.EVA.value} was successful.", level="info"
         )
-        # TODO: Update `isa_json`, based on the receipt returned
+        # TODO: Update `investigation`, based on the receipt returned
 
     # Return the updated ISA JSON
     with open(f"{output}.json", "w") as f:
-        f.write(isa_json.model_dump_json(by_alias=True, exclude_none=True))
+        f.write(investigation.model_dump_json(by_alias=True, exclude_none=True))
 
 
 def submit_to_biosamples(
-    isa_json: IsaJson,
+    investigation: Investigation,
     biosamples_credentials: dict[str, str],
     webin_token_url: str,
     biosamples_url: str,
@@ -225,8 +222,8 @@ def submit_to_biosamples(
         biosamples_url,
         headers=headers,
         params=params,
-        json=reduce_isa_json_for_target_repo(
-            isa_json, TargetRepository.BIOSAMPLES.value
+        json=reduce_investigation_for_target_repo(
+            investigation, TargetRepository.BIOSAMPLES.value
         ).model_dump(by_alias=True, exclude_none=True),
     )
 
@@ -245,7 +242,7 @@ def submit_to_biosamples(
 
 def upload_to_metabolights(
     file_paths: list[str],
-    isa_json: IsaJson,
+    investigation: Investigation,
     metabolights_credentials: dict[str, str],
     metabolights_url: str,
     metabolights_token_url: str,
@@ -267,10 +264,10 @@ def upload_to_metabolights(
         "accept": "application/json",
         "Authorization": f"Bearer {token}",
     }
-    isa_json_str = reduce_isa_json_for_target_repo(
-        isa_json, TargetRepository.METABOLIGHTS
-    ).investigation.model_dump_json(by_alias=True, exclude_none=True)
-    json_file = io.StringIO(isa_json_str)
+    investigation_str = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS
+    ).model_dump_json(by_alias=True, exclude_none=True)
+    json_file = io.StringIO(investigation_str)
 
     files = {"isa_json_file": ("isa_json.json", json_file)}
     result = None
@@ -360,7 +357,7 @@ def find_value_in_info_section(
 
 
 def submit_to_ena(
-    isa_json: IsaJson, user_credentials: dict[str, str], submission_url: str
+    investigation: Investigation, user_credentials: dict[str, str], submission_url: str
 ) -> requests.Response:
     params = {
         "webinUserName": user_credentials["username"],
@@ -371,8 +368,8 @@ def submit_to_ena(
         submission_url,
         headers=headers,
         params=params,
-        json=reduce_isa_json_for_target_repo(
-            isa_json, TargetRepository.ENA.value
+        json=reduce_investigation_for_target_repo(
+            investigation, TargetRepository.ENA.value
         ).model_dump(by_alias=True, exclude_none=True),
     )
 

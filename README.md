@@ -47,25 +47,25 @@ MARS-CLI is not a platform to host data and will not store the data after submis
 
 This installation procedure describes a typical Linux installation. This application can perfectly work on Windows and MacOS but some of the steps might be different. 
 
-Installing the mars-cli from source:
+This project is managed with [uv](https://docs.astral.sh/uv/). Install uv first if you don't have it yet.
+
+Installing the mars-cli from source as a command line tool:
 
 ```sh
 cd mars-cli # Assuming you are in the root folder of this project
-pip install .
+uv tool install .
 ```
 
-If you want to install the optional testing dependencies as well, useful when contributing to the project:
+If you want to contribute to the project, set up a development environment with all testing dependencies instead:
 
 ```sh
-pip install .[test]
+uv sync
+uv run pytest
 ```
 
-If you want to overwrite the `settings.ini` file when reinstalling, you need to set the environmental variable `OVERWRITE_SETTINGS` to `True`:
+Commands like `uv run mars-cli --help`, `uv run black`, `uv run ruff` and `uv run mypy` then run inside that environment.
 
-```sh
-OVERWRITE_SETTINGS=True pip install .[test]
-```
-Installing the MARS-cli, will by default create a `.mars` directory in the home directory to store settings and log files.
+Running the MARS-cli for the first time will by default create a `.mars` directory in the home directory to store settings and log files.
 If you wish to create the `.mars` directory in another place, you must specify the `MARS_SETTINGS_DIR` variable and set it to the desired path:
 
 ```sh
@@ -84,7 +84,8 @@ Once installed, the CLI application will be available from the terminal.
 
 ## Configuration
 
-Installing this application will also generate a `settings.ini` file in `$HOME/.mars/`.
+Running this application for the first time will generate a `settings.ini` file in `$HOME/.mars/`.
+To regenerate the default settings, delete the `settings.ini` file and run the CLI again.
 
 ```
 [logging]
@@ -198,11 +199,6 @@ Usage: mars-cli submit [OPTIONS] ISA_JSON_FILE
 
 Options:
   --output TEXT
-  --investigation-is-root BOOLEAN
-                                  Boolean indicating if the investigation is
-                                  the root of the ISA JSON. Set this to True
-                                  if the ISA-JSON does not contain a
-                                  'investigation' field.
   --submit-to-metabolights BOOLEAN
                                   Submit to Metabolights.
   --data-files FILENAME           Path of files to upload
@@ -303,14 +299,6 @@ Following command line will avoid submission to metabolights repository:
 mars-cli submit --submit-to-metabolights False my-credentials my-isa-json.json
 ```
 
-`--investigation-is-root`: By default this flag is set to false, meaning the ISA-JSON should have the `investigation`
-key at the root level. In case the root level __IS__ the investigation (`investigation` level is omitted), you need set
-the flag `--investigation-is-root` to `True` in order to validate the ISA-JSON.
-
-```sh
-mars-cli submit --investigation-is-root True my-credentials my-isa-json.json
-```
-
 `--output`: By default "output_{datetime.now()}", the name of the isa final output.
 
 ```sh
@@ -336,18 +324,11 @@ This feature is implemented as a set of additional validation rules a user can c
 needs.
 
 ```sh
-mars-cli validate-isa-json --investigation-is-root True ../test-data/biosamples-input-isa.json
+mars-cli validate-isa-json ../test-data/biosamples-input-isa.json
 ```
 
-### Options
-
-`--investigation-is-root`: By default this flag is set to false, meaning the ISA-JSON should have the `investigation`
-key at the root level. In case the root level __IS__ the investigation (`investigation` level is omitted), you need set
-the flag `--investigation-is-root` to `True` in order to validate the ISA-JSON.
-
-```sh
-mars-cli validate-isa-json my-isa-investigation.json
-```
+__Note:__ The root level of the ISA-JSON __IS__ the investigation. ISA-JSON files that wrap the investigation in an
+`investigation` key are not supported.
 
 ## Feature:  Extending BioSamples' records
 > **Status**: 🚧 To Be Developed

@@ -26,7 +26,7 @@ import os
 import textwrap
 from pathlib import Path
 
-from isa_generator import generate_isa_json_with_data
+from isa_generator import generate_investigation_with_data
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -39,8 +39,9 @@ def ensure_settings_ini() -> Path:
 
     settings_path = mars_dir / "settings.ini"
 
-    content = textwrap.dedent(
-        f"""
+    content = (
+        textwrap.dedent(
+            f"""
         [logging]
         log_level = INFO
         log_file = {mars_dir / "app.log"}
@@ -60,7 +61,9 @@ def ensure_settings_ini() -> Path:
         development-submission-url = https://www-test.ebi.ac.uk/metabolights/mars/ws3/submissions/
         development-token-url = https://www-test.ebi.ac.uk/metabolights/mars/ws3/auth/token
         """
-    ).strip() + "\n"
+        ).strip()
+        + "\n"
+    )
 
     settings_path.write_text(content)
 
@@ -127,13 +130,15 @@ def main() -> None:
     if holofood_template:
         holofood_path = Path(holofood_template)
         if not holofood_path.exists():
-            raise FileNotFoundError(f"HoloFood ISA template not found at {holofood_path}")
+            raise FileNotFoundError(
+                f"HoloFood ISA template not found at {holofood_path}"
+            )
         isa_templates["holofood"] = holofood_path
 
     prepared_submissions = []
     for submission_name, isa_template in isa_templates.items():
         submission_dir = work_dir / submission_name
-        isa_path, data_files = generate_isa_json_with_data(
+        isa_path, data_files = generate_investigation_with_data(
             work_dir=submission_dir,
             template_path=isa_template,
         )

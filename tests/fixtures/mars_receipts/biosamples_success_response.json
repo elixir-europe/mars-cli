@@ -7,9 +7,6 @@
             "value": "SAMEA131504584",
             "path": [
                 {
-                    "key": "investigation"
-                },
-                {
                     "key": "studies",
                     "where": {
                         "key": "title",
@@ -31,9 +28,6 @@
         {
             "value": "SAMEA131504583",
             "path": [
-                {
-                    "key": "investigation"
-                },
                 {
                     "key": "studies",
                     "where": {
