@@ -181,6 +181,17 @@ class AssayMaterialType(IsaBase):
     otherMaterials: List[Material] = []
 
 
+def _is_valid_filename(filename: str, prefix: str, arc_kind: str) -> bool:
+    """
+    Accept ISA-Tab style names (for example 's_study.txt') and ARC style names
+    (for example 'studies/my_study/isa.study.xlsx'). For ARC names only the
+    last path segment is checked.
+    """
+    if re.match(rf"^{prefix}_", filename):
+        return True
+    return filename.replace("\\", "/").split("/")[-1] == f"isa.{arc_kind}.xlsx"
+
+
 class Assay(CommentedIsaBase):
     id: Optional[str] = Field(alias="@id", default=None)
     characteristicCategories: List[MaterialAttribute] = []
@@ -197,10 +208,12 @@ class Assay(CommentedIsaBase):
     def validate_filename(cls, v: str) -> Union[str, None]:
         if v is None:
             return v
-        elif re.match(r"^a_", v):
+        elif _is_valid_filename(v, "a", "assay"):
             return v
         else:
-            raise ValueError("'filename' should start with 'a_'")
+            raise ValueError(
+                "'filename' should start with 'a_' or be named 'isa.assay.xlsx'"
+            )
 
     @field_validator("comments")
     def detect_target_repo_comments(cls, v: List[Comment]) -> Optional[List[Comment]]:
@@ -277,10 +290,12 @@ class Study(CommentedIsaBase):
     def validate_filename(cls, v: str) -> Union[str, None]:
         if v is None:
             return v
-        elif re.match(r"^s_", v):
+        elif _is_valid_filename(v, "s", "study"):
             return v
         else:
-            raise ValueError("'filename' should start with 's_'")
+            raise ValueError(
+                "'filename' should start with 's_' or be named 'isa.study.xlsx'"
+            )
 
 
 class Investigation(CommentedIsaBase):
@@ -300,7 +315,9 @@ class Investigation(CommentedIsaBase):
     def validate_filename(cls, v: str) -> Union[str, None]:
         if v is None:
             return v
-        elif re.match(r"^i_", v):
+        elif _is_valid_filename(v, "i", "investigation"):
             return v
         else:
-            raise ValueError("'filename' should start with 'i_'")
+            raise ValueError(
+                "'filename' should start with 'i_' or be named 'isa.investigation.xlsx'"
+            )
