@@ -405,6 +405,27 @@ def test_filename_validation():
     assert Assay.model_validate({"@id": "6", "filename": "a_Good_File_Name"})
 
 
+def test_filename_validation_arc_style():
+    assert Investigation.model_validate(
+        {"@id": "1", "filename": "isa.investigation.xlsx"}
+    )
+    assert Study.model_validate(
+        {"@id": "2", "filename": "studies/MyStudy/isa.study.xlsx"}
+    )
+    assert Assay.model_validate(
+        {"@id": "3", "filename": "assays/MyAssay/isa.assay.xlsx"}
+    )
+    assert Assay.model_validate(
+        {"@id": "4", "filename": r"assays\MyAssay\isa.assay.xlsx"}
+    )
+
+    # An ARC file name of the wrong kind is still rejected
+    with pytest.raises(ValidationError, match="'filename' should start with 's_'"):
+        Study.model_validate({"@id": "5", "filename": "isa.assay.xlsx"})
+    with pytest.raises(ValidationError, match="'filename' should start with 'a_'"):
+        Assay.model_validate({"@id": "6", "filename": "isa.assay.xlsx.bak"})
+
+
 def test_map_data_files_to_repositories():
     investigation = load_investigation(
         file_path="MARS/test-data/ISA-BH2024-ALL/isa-bh2024-all.json"
