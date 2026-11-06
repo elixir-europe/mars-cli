@@ -117,12 +117,6 @@ def cli(ctx, development):
     help="Submit to Metabolights.",
 )
 @click.option(
-    "--investigation-is-root",
-    default=True,
-    type=click.BOOL,
-    help="Boolean indicating if the investigation is the root of the ISA JSON. Defaults to True. Set this to False if the ISA-JSON contains an 'investigation' field at the root level.",
-)
-@click.option(
     "--output",
     type=click.STRING,
     default=f"output_{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}",
@@ -138,7 +132,6 @@ def submit(
     submit_to_biosamples,
     submit_to_ena,
     submit_to_metabolights,
-    investigation_is_root,
     file_transfer,
     output,
     data_files,
@@ -170,7 +163,6 @@ def submit(
         credentials_file,
         isa_json_file.name,
         target_repositories,
-        investigation_is_root,
         urls_dict,
         file_transfer,
         output,
@@ -216,25 +208,17 @@ def health_check(ctx):
     "isa_json_file",
     type=click.Path(exists=True),
 )
-@click.option(
-    "--investigation-is-root",
-    default=True,
-    type=click.BOOL,
-    help="Boolean indicating if the investigation is the root of the ISA JSON. Defaults to True. Set this to False if the ISA-JSON contains an 'investigation' field at the root level.",
-)
-def validate_isa_json(isa_json_file, investigation_is_root):
+def validate_isa_json(isa_json_file):
     """Validate the ISA JSON file."""
     print_and_log(f"Validating {isa_json_file}.")
 
     try:
-        isa_json = load_isa_json(isa_json_file, investigation_is_root)
+        isa_json = load_isa_json(isa_json_file)
 
         if isinstance(isa_json, ValidationError):
             raise ValidationError
 
-        print_and_log(
-            f"ISA JSON with investigation '{isa_json.investigation.title}' is valid."
-        )
+        print_and_log(f"ISA JSON with investigation '{isa_json.title}' is valid.")
     except ValidationError as err:
         print_and_log(f"Validation errors occurred:\n{err}", level="error")
 

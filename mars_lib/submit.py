@@ -26,7 +26,7 @@ from mars_lib.isa_json import (
     update_isa_json,
     map_data_files_to_repositories,
 )
-from mars_lib.models.isa_json import Comment, IsaJson
+from mars_lib.models.isa_json import Comment, Investigation
 from mars_lib.models.repository_response import RepositoryResponse
 from mars_lib.target_repo import TargetRepository
 from mars_lib.logging import print_and_log
@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import List
 
 
-def save_step_to_file(time_stamp: float, filename: str, isa_json: IsaJson):
+def save_step_to_file(time_stamp: float, filename: str, isa_json: Investigation):
     dir_path = f"tmp/{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
     os.makedirs(dir_path, exist_ok=True)
 
@@ -55,7 +55,6 @@ def submission(
     credentials_file: TextIOWrapper,
     isa_json_file: str,
     target_repositories: list[str],
-    investigation_is_root: bool,
     urls: dict[str, Any],
     file_transfer: str,
     output: str,
@@ -84,15 +83,13 @@ def submission(
 
         user_credentials = load_credentials(credentials_file)
 
-    isa_json = load_isa_json(isa_json_file, investigation_is_root)
+    isa_json = load_isa_json(isa_json_file)
 
     # Guard clause to keep MyPy happy
     if isinstance(isa_json, ValidationError):
         raise ValidationError(f"ISA JSON is invalid: {isa_json}")
 
-    print_and_log(
-        f"ISA JSON with investigation '{isa_json.investigation.title}' is valid."
-    )
+    print_and_log(f"ISA JSON with investigation '{isa_json.title}' is valid.")
 
     # create data file map
     data_file_map = map_data_files_to_repositories(
@@ -187,7 +184,7 @@ def submission(
             metabolights_receipt_obj
         )
         # TODO: MetaboLights creates accession number with errors. Errors are not handled.
-        isa_json.investigation.studies[0].comments.append(
+        isa_json.studies[0].comments.append(
             Comment(
                 name="metabolights_accession",
                 value=metabolights_receipt.accessions[0].value,
@@ -210,7 +207,7 @@ def submission(
 
 
 def submit_to_biosamples(
-    isa_json: IsaJson,
+    isa_json: Investigation,
     biosamples_credentials: dict[str, str],
     webin_token_url: str,
     biosamples_url: str,
@@ -245,7 +242,7 @@ def submit_to_biosamples(
 
 def upload_to_metabolights(
     file_paths: list[str],
-    isa_json: IsaJson,
+    isa_json: Investigation,
     metabolights_credentials: dict[str, str],
     metabolights_url: str,
     metabolights_token_url: str,
@@ -269,7 +266,7 @@ def upload_to_metabolights(
     }
     isa_json_str = reduce_isa_json_for_target_repo(
         isa_json, TargetRepository.METABOLIGHTS
-    ).investigation.model_dump_json(by_alias=True, exclude_none=True)
+    ).model_dump_json(by_alias=True, exclude_none=True)
     json_file = io.StringIO(isa_json_str)
 
     files = {"isa_json_file": ("isa_json.json", json_file)}
@@ -360,7 +357,7 @@ def find_value_in_info_section(
 
 
 def submit_to_ena(
-    isa_json: IsaJson, user_credentials: dict[str, str], submission_url: str
+    isa_json: Investigation, user_credentials: dict[str, str], submission_url: str
 ) -> requests.Response:
     params = {
         "webinUserName": user_credentials["username"],
