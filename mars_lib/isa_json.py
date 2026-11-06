@@ -23,22 +23,22 @@ from mars_lib.models.repository_response import (
 )
 
 
-def reduce_isa_json_for_target_repo(
-    input_isa_json: Investigation, target_repo: str
+def reduce_investigation_for_target_repo(
+    input_investigation: Investigation, target_repo: str
 ) -> Investigation:
     """
     Filters out assays that are not meant to be sent to the specified target repository.
 
     Args:
-        input_isa_json (Investigation): Input ISA JSON that contains the original information.
+        input_investigation (Investigation): Input ISA JSON that contains the original information.
         target_repo (TargetRepository): Target repository as a constant.
 
     Returns:
         Investigation: Filtered ISA JSON.
     """
-    filtered_isa_json = input_isa_json.model_copy(deep=True)
+    filtered_investigation = input_investigation.model_copy(deep=True)
     new_studies = []
-    studies = filtered_isa_json.studies
+    studies = filtered_investigation.studies
     for study in studies:
         if target_repo == TargetRepository.BIOSAMPLES.value:
             filtered_assays = []
@@ -53,8 +53,8 @@ def reduce_isa_json_for_target_repo(
         study.assays = filtered_assays
         new_studies.append(study)
 
-    filtered_isa_json.studies = new_studies
-    return filtered_isa_json
+    filtered_investigation.studies = new_studies
+    return filtered_investigation
 
 
 def detect_target_repo_comment(comments: List[Comment]) -> Comment:
@@ -89,7 +89,7 @@ def is_assay_for_target_repo(assay: Assay, target_repo: str) -> bool:
         return False
 
 
-def load_isa_json(file_path: str) -> Union[Investigation, ValidationError]:
+def load_investigation(file_path: str) -> Union[Investigation, ValidationError]:
     """
     Reads the file and validates it as a valid ISA JSON.
 
@@ -102,9 +102,9 @@ def load_isa_json(file_path: str) -> Union[Investigation, ValidationError]:
         Union[Investigation, ValidationError]: Depending on the validation, returns the investigation or a pydantic validation error.
     """
     with open(file_path, "r") as json_file:
-        isa_json = json.load(json_file)
+        data = json.load(json_file)
 
-    return Investigation.model_validate(isa_json)
+    return Investigation.model_validate(data)
 
 
 def get_filter_for_accession_key(accession: Accession, key: str) -> Optional[Filter]:
@@ -398,14 +398,14 @@ def create_accession_characteristic(
     updated_material.characteristics.append(new_material_attribute_value)
 
 
-def update_isa_json(
-    isa_json: Investigation, repo_response: RepositoryResponse
+def update_investigation(
+    investigation: Investigation, repo_response: RepositoryResponse
 ) -> Investigation:
     """
     Adds the accession to the ISA JSON.
 
     Args:
-        isa_json (Investigation): The ISA JSON to be updated.
+        investigation (Investigation): The ISA JSON to be updated.
         repo_response (RepositoryResponse): The response from the repository.
 
     Returns:
@@ -431,7 +431,7 @@ def update_isa_json(
         ################################################################################################################
         # Filter the study or assay based on the filter
         ################################################################################################################
-        updated_node = apply_filter(study_filter, isa_json.studies)
+        updated_node = apply_filter(study_filter, investigation.studies)
         if target_level == "assay":
             assay_filter = get_filter_for_accession_key(accession, "assays")
             if not assay_filter:
@@ -479,7 +479,7 @@ def update_isa_json(
 
             add_accession_to_data_file_node(updated_node, accession.value)
         else:
-            updated_study = apply_filter(study_filter, isa_json.studies)
+            updated_study = apply_filter(study_filter, investigation.studies)
             accession_comment = Comment(
                 name=f"{target_repository}_{target_level}_accession",
                 value=accession.value,
@@ -499,16 +499,16 @@ def update_isa_json(
                 )
                 if updated_assay:
                     updated_assay.comments.append(accession_comment)
-    return isa_json
+    return investigation
 
 
 def map_data_files_to_repositories(
-    files: List[str], isa_json: Investigation
+    files: List[str], investigation: Investigation
 ) -> Dict[str, List[str]]:
     # Note: This works well in
     df_map: Dict[str, List[str]] = {}
     assays: List[Assay] = [
-        assay for study in isa_json.studies for assay in study.assays
+        assay for study in investigation.studies for assay in study.assays
     ]
 
     files_dicts = [{"full_name": f, "short_name": f.split("/")[-1]} for f in files]

@@ -9,7 +9,7 @@ from pydantic_core import ValidationError
 import requests
 
 from mars_lib.credential import CredentialManager
-from mars_lib.isa_json import load_isa_json
+from mars_lib.isa_json import load_investigation
 from mars_lib.logging import init_logging, print_and_log
 from mars_lib.settings import generate_config
 from mars_lib.submit import submission
@@ -203,22 +203,22 @@ def health_check(ctx):
             )
 
 
-@cli.command()
+@cli.command("validate-isa-json")
 @click.argument(
     "isa_json_file",
     type=click.Path(exists=True),
 )
-def validate_isa_json(isa_json_file):
+def validate_investigation(isa_json_file):
     """Validate the ISA JSON file."""
     print_and_log(f"Validating {isa_json_file}.")
 
     try:
-        isa_json = load_isa_json(isa_json_file)
+        investigation = load_investigation(isa_json_file)
 
-        if isinstance(isa_json, ValidationError):
+        if isinstance(investigation, ValidationError):
             raise ValidationError
 
-        print_and_log(f"ISA JSON with investigation '{isa_json.title}' is valid.")
+        print_and_log(f"ISA JSON with investigation '{investigation.title}' is valid.")
     except ValidationError as err:
         print_and_log(f"Validation errors occurred:\n{err}", level="error")
 

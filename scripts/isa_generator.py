@@ -163,7 +163,7 @@ def _update_datafiles_with_generated_files(
     return generated_paths
 
 
-def generate_isa_json_with_data(
+def generate_investigation_with_data(
     work_dir: Path,
     template_path: Path,
     n_files: int | None = None,

@@ -26,7 +26,7 @@ import os
 import textwrap
 from pathlib import Path
 
-from isa_generator import generate_isa_json_with_data
+from isa_generator import generate_investigation_with_data
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -138,7 +138,7 @@ def main() -> None:
     prepared_submissions = []
     for submission_name, isa_template in isa_templates.items():
         submission_dir = work_dir / submission_name
-        isa_path, data_files = generate_isa_json_with_data(
+        isa_path, data_files = generate_investigation_with_data(
             work_dir=submission_dir,
             template_path=isa_template,
         )
