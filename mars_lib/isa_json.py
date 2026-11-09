@@ -504,26 +504,18 @@ def update_investigation(
 
             add_accession_to_data_file_node(updated_node, accession.value)
         else:
-            updated_study = apply_filter(study_filter, investigation.studies)
-            accession_comment = Comment(
-                name=f"{target_repository}_{target_level}_accession",
-                value=accession.value,
-            )
+            # A path that ends at a study or assay (no materials or data files)
+            # carries the repository's study record. ENA creates one ENA study
+            # per assay, so its study accession points at that assay.
+            if not updated_node:
+                raise ValueError(f"Node not found for {accession.value}.")
 
-            if target_level == "study":
-                updated_study.comments.append(accession_comment)
-            else:
-                updated_assay = next(
-                    filter(
-                        lambda assay: is_assay_for_target_repo(
-                            assay, target_repository
-                        ),
-                        updated_study.assays,
-                    ),
-                    None,
+            updated_node.comments.append(
+                Comment(
+                    name=f"{target_repository}_study_accession",
+                    value=accession.value,
                 )
-                if updated_assay:
-                    updated_assay.comments.append(accession_comment)
+            )
     return investigation
 
 
