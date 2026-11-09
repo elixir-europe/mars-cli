@@ -335,7 +335,10 @@ def _biosamples_used_in_assay(
 
 
 def _fetch_assay_target_repo(assay: Assay) -> str:
-    return detect_target_repo_comment(assay.comments).value
+    target_repo = detect_target_repo_comment(assay.comments or []).value
+    if target_repo is None:
+        raise ValueError(f"The target repository of assay '{assay.id}' has no value.")
+    return target_repo
 
 
 def _fetch_assay_accession(assay: Assay) -> Optional[str]:

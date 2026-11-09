@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-from enum import Enum
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from mars_lib.target_repo import TargetRepository, TARGET_REPO_KEY
 
@@ -116,6 +115,7 @@ class Material(CommentedIsaBase):
     type: str | None = None
     derivesFrom: list[Material] = []
 
+
 class Process(CommentedIsaBase):
     id: str | None = Field(alias="@id", default=None)
     date: str | None = None
@@ -123,9 +123,7 @@ class Process(CommentedIsaBase):
     inputs: list[Source] | list[Sample] | list[Material] | list[Data] = []
     name: str | None = None
     nextProcess: Process | None = None
-    outputs: list[Sample] | list[Material] | list[Data] = Field(
-        default=[]
-    )
+    outputs: list[Sample] | list[Material] | list[Data] = Field(default=[])
     parameterValues: list[ProcessParameterValue] = []
     performer: str | None = None
     previousProcess: Process | None = None

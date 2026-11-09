@@ -180,7 +180,7 @@ from mars_lib.biosamples_external_references import (
     update_external_references,
     validate_json_against_schema,
 )
-from mars_lib.models.isa_json import Assay, Investigation, Sample
+from mars_lib.models.isa_json import Assay, Comment, Investigation, Sample
 
 MODULE = "mars_lib.biosamples_external_references"
 
@@ -466,3 +466,11 @@ def test_update_remote_record_mocked():
         put.side_effect = requests.Timeout("slow")
         with pytest.raises(RuntimeError, match="Error making the request"):
             record.update_remote_record(header)
+
+
+def test_fetch_assay_target_repo_without_value():
+    assay = Assay.model_construct(
+        id="a1", comments=[Comment(name="target_repository", value=None)]
+    )
+    with pytest.raises(ValueError, match="has no value"):
+        _fetch_assay_target_repo(assay)

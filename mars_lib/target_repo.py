@@ -44,8 +44,8 @@ class TargetRepository(str, Enum):
                     "EXTERNAL-REF-URL": config.get(
                         "ena",
                         "development-external-references-url",
-                        fallback="https://www.ebi.ac.uk/ena/browser/view/"
-                    )
+                        fallback="https://www.ebi.ac.uk/ena/browser/view/",
+                    ),
                 },
                 "WEBIN": {
                     "SERVICE": config.get(
@@ -78,8 +78,8 @@ class TargetRepository(str, Enum):
                     "EXTERNAL-REF-URL": config.get(
                         "metabolights",
                         "development-external-references-url",
-                        fallback="https://wwwdev.ebi.ac.uk/metabolights/editor/"
-                    )
+                        fallback="https://wwwdev.ebi.ac.uk/metabolights/editor/",
+                    ),
                 },
                 "BIOSAMPLES": {
                     "SERVICE": config.get(
@@ -114,8 +114,8 @@ class TargetRepository(str, Enum):
                     "EXTERNAL-REF-URL": config.get(
                         "ena",
                         "development-external-references-url",
-                        fallback="https://www.ebi.ac.uk/ena/browser/view/"
-                    )
+                        fallback="https://www.ebi.ac.uk/ena/browser/view/",
+                    ),
                 },
                 "WEBIN": {
                     "SERVICE": config.get(
@@ -148,8 +148,8 @@ class TargetRepository(str, Enum):
                     "EXTERNAL-REF-URL": config.get(
                         "metabolights",
                         "development-external-references-url",
-                        fallback="https://www.ebi.ac.uk/metabolights/editor/"
-                    )
+                        fallback="https://www.ebi.ac.uk/metabolights/editor/",
+                    ),
                 },
                 "BIOSAMPLES": {
                     "SERVICE": config.get(
