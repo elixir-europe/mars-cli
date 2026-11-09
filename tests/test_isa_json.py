@@ -227,25 +227,23 @@ def test_update_study_materials_with_accession_categories():
     repo_response = RepositoryResponse.from_json_file(response_file_path)
 
     updated_investigation = update_investigation(validated_investigation, repo_response)
-    # Check the accession number of the source
-    source_accession = "SAMEA131504583"
-    assert (
-        updated_investigation.studies[0]
-        .materials.sources[0]
-        .characteristics[-1]
-        .value.annotationValue
-        == source_accession
-    )
+    study = updated_investigation.studies[0]
+    accession_category_id = "#characteristic_category/accession_329"
 
-    # Check the accession number of the sample
-    sample_accession = "SAMEA131504584"
-    assert (
-        updated_investigation.studies[0]
-        .materials.samples[0]
-        .characteristics[-1]
-        .value.annotationValue
-        == sample_accession
-    )
+    def accession_values(material):
+        # Characteristics reference their category by '@id' only in this file.
+        return [
+            char.value.annotationValue
+            for char in material.characteristics
+            if char.category and char.category.id == accession_category_id
+        ]
+
+    # The source already has an accession characteristic: it is filled in,
+    # not duplicated.
+    assert accession_values(study.materials.sources[0]) == ["SAMEA131504583"]
+
+    # The sample has none yet: exactly one is created.
+    assert accession_values(study.materials.samples[0]) == ["SAMEA131504584"]
 
 
 def test_update_study_materials_multiple_samples_from_one_source():
@@ -342,6 +340,93 @@ def test_update_study_materials_multiple_samples_from_one_source():
     assert (
         updated_samples[1].characteristics[-1].value.annotationValue == "SAMEA_ROOT_1"
     )
+
+
+def _biosamples_material_path(study_title, material_key, name):
+    return [
+        {"key": "studies", "where": {"key": "title", "value": study_title}},
+        {"key": "materials"},
+        {"key": material_key, "where": {"key": "name", "value": name}},
+    ]
+
+
+def _accession_characteristic(material, category_id):
+    return next(
+        (char, index)
+        for index, char in enumerate(material.characteristics)
+        if char.category and char.category.id == category_id
+    )
+
+
+def test_update_material_accession_keeps_existing_value_fields():
+    investigation = load_investigation("MARS/test-data/biosamples-input-isa-multi.json")
+    study = investigation.studies[0]
+    accession_category_id = "#characteristic_category/accession_329"
+    sources = {source.id: source for source in study.materials.sources}
+
+    # plant 1 has an accession characteristic with empty termSource/termAccession;
+    # plant 2's value additionally carries its own @id.
+    _, plant_1_index = _accession_characteristic(
+        sources["#source/330"], accession_category_id
+    )
+    plant_2_value, _ = _accession_characteristic(
+        sources["#source/430"], accession_category_id
+    )
+    plant_2_value.value.id = "#ontology_annotation/existing_plant_2"
+
+    repo_response = RepositoryResponse.model_validate(
+        {
+            "targetRepository": "biosamples",
+            "errors": [],
+            "info": [],
+            "accessions": [
+                {
+                    "value": "SAMEA_PLANT_1",
+                    "path": _biosamples_material_path(
+                        study.title, "sources", "plant 1"
+                    ),
+                },
+                {
+                    "value": "SAMEA_PLANT_2",
+                    "path": _biosamples_material_path(
+                        study.title, "sources", "plant 2"
+                    ),
+                },
+                {
+                    "value": "SAMEA_LEAF_1",
+                    "path": _biosamples_material_path(study.title, "samples", "leaf 1"),
+                },
+            ],
+        }
+    )
+
+    updated_study = update_investigation(investigation, repo_response).studies[0]
+    updated_sources = {source.id: source for source in updated_study.materials.sources}
+    updated_samples = {sample.id: sample for sample in updated_study.materials.samples}
+
+    # Existing value: filled in place, empty term fields kept, position unchanged.
+    plant_1_char, index = _accession_characteristic(
+        updated_sources["#source/330"], accession_category_id
+    )
+    assert index == plant_1_index
+    assert plant_1_char.value.annotationValue == "SAMEA_PLANT_1"
+    assert plant_1_char.value.termSource == ""
+    assert plant_1_char.value.termAccession == ""
+    assert plant_1_char.value.id == "#ontology_annotation/accession_source_330"
+
+    # Existing value with its own @id keeps that id.
+    plant_2_char, _ = _accession_characteristic(
+        updated_sources["#source/430"], accession_category_id
+    )
+    assert plant_2_char.value.annotationValue == "SAMEA_PLANT_2"
+    assert plant_2_char.value.id == "#ontology_annotation/existing_plant_2"
+
+    # No accession characteristic yet: a new one gets a clean, single-'#' id.
+    leaf_1_char, _ = _accession_characteristic(
+        updated_samples["#sample/331"], accession_category_id
+    )
+    assert leaf_1_char.value.annotationValue == "SAMEA_LEAF_1"
+    assert leaf_1_char.value.id == "#ontology_annotation/accession_sample_331"
 
 
 def test_update_study_only_with_ena_study_accession_comment():
