@@ -18,7 +18,7 @@ class Comment(IsaBase):
 
 
 class CommentedIsaBase(IsaBase):
-    comments: list[Comment] | None = None
+    comments: list[Comment] = []
 
 
 class OntologySourceReference(CommentedIsaBase):
@@ -28,36 +28,10 @@ class OntologySourceReference(CommentedIsaBase):
     version: str | None = None
 
 
-# TODO: Question: Should these be case-sensitive?
-class DataTypeEnum(str, Enum):
-    RAW_DATA_FILE = "Raw Data File"
-    DERIVED_DATA_FILE = "Derived Data File"
-    IMAGE_FILE = "Image File"
-    # The following names are not mentioned in the specs (https://isa-specs.readthedocs.io/en/latest/isajson.html#data-schema-json).
-    # However, spectral data file names are mentioned in the ISA-Tab specs (https://isa-specs.readthedocs.io/en/latest/isatab.html).
-    # TODO: Review and support all possible data file names mentioned in the the ISA-Tab specs (Section 2.3.8).
-    # Metabolights support the following data file types:
-    RAW_SPECTRAL_DATA_FILE = "Raw Spectral Data File"
-    DERIVED_SPECTRAL_DATA_FILE = "Derived Spectral Data File"
-    FREE_INDUCTION_DECAY_DATA_FILE = "Free Induction Decay Data File"
-    ACQUSITION_PARAMETER_DATA_FILE = "Acquisition Parameter Data File"
-    METABOLITE_ASSIGNMENT_FILE = "Metabolite Assignment File"  # Used in MetaboLights to report metabolite assignments
-    CHECKSUM = "checksum"
-
-
-DATA_TYPE_VALUES = {item.value for item in DataTypeEnum}
-
-
 class Data(CommentedIsaBase):
     id: str | None = Field(alias="@id", default=None)
     name: str | None = None
-    type: DataTypeEnum | None = None
-
-    @field_validator("type")
-    def apply_enum(cls, v: str) -> str:
-        if v not in DATA_TYPE_VALUES:
-            raise ValueError("Invalid material type")
-        return v
+    type: str | None = None
 
 
 class OntologyAnnotation(CommentedIsaBase):
@@ -135,27 +109,12 @@ class Protocol(CommentedIsaBase):
     version: str | None = None
 
 
-# Enum for material -> type
-# TODO: Question: Should these be case-sensitive?
-class MaterialTypeEnum(str, Enum):
-    EXTRACT_NAME = "Extract Name"
-    LABELED_EXTRACT_NAME = "Labeled Extract Name"
-    LIBRARY_NAME = "library name"  # TODO: QUESTION: This is not mentioned in the specs (https://isa-specs.readthedocs.io/en/latest/isajson.html#material-schema-json) but was found in DataHub ISA-JSON and ARC ISA-JSON.
-
-
 class Material(CommentedIsaBase):
     id: str | None = Field(alias="@id", default=None)
     characteristics: list[MaterialAttributeValue] = []
     name: str | None = None
     type: str | None = None
     derivesFrom: list[Material] = []
-
-    @field_validator("type")
-    def apply_enum(cls, v: str) -> str:
-        if v not in [item.value for item in MaterialTypeEnum]:
-            raise ValueError("Invalid material type")
-        return v
-
 
 class Process(CommentedIsaBase):
     id: str | None = Field(alias="@id", default=None)
