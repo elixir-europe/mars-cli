@@ -3,22 +3,23 @@
 from typing import Any
 
 from mars_lib.isa_json import detect_target_repo_comment
-from mars_lib.models.isa_json import IsaJson, Assay, Sample
+from mars_lib.models.isa_json import Investigation, Assay, Sample
 from requests import Response, HTTPError
 
 from mars_lib.target_repo import TargetRepository
 
 
-def _extract_accessions(isa_json: IsaJson) -> list[dict[str, Any]]:
+def _extract_accessions(investigation: Investigation) -> list[dict[str, Any]]:
     studies = []
 
-    for study in isa_json.investigation.studies:
-        study_samples = study.materials.samples
+    for study in investigation.studies:
+        study_materials  = getattr(study, "materials", {})
+        study_samples = getattr(study_materials, "samples", [])
         study_dict = {'title': study.title, 'id': study.id}
         accessions = [
             {
                 'id': assay.id,
-                'title': assay.title,
+                'title': getattr(assay, "title", ""),
                 'accession': _fetch_assay_accession(assay),
                 'target_repo': _fetch_assay_target_repo(assay),
                 'biosamples': _biosamples_used_in_assay(study_samples, assay)
@@ -67,4 +68,3 @@ def update_external_references(isa_json: IsaJson, urls_dict: dict) -> Response |
             url = urls_dict.get(TargetRepository(assay['target_repo']), {}).get('EXTERNAL-REF-URL', None)
             if url is None:
                 return ValueError(f"No 'EXTERNAL-REF-URL' found for target repository '{assay['target_repo']}' in assay '{assay['title']}'.")
-
