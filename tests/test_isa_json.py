@@ -73,38 +73,26 @@ def test_reduce_investigation_for_biosamples():
     assert len(filtered_investigation.studies[0].assays) == 0
 
 
-def test_data_type_validator():
-    valid_data_json = {"@id": "data_001", "name": "data 1", "type": "Image File"}
-
-    invalid_data_json = {
-        "@id": "data_001",
-        "name": "data 1",
-        "type": "Custom File",  # This is not a valid data type
-    }
-
-    assert Data.model_validate(valid_data_json)
-
-    with pytest.raises(ValidationError):
-        Data.model_validate(invalid_data_json)
+def test_data_type_is_free_text():
+    # The type is not restricted to a fixed list of values
+    assert Data.model_validate(
+        {"@id": "data_001", "name": "data 1", "type": "Image File"}
+    )
+    custom = Data.model_validate(
+        {"@id": "data_002", "name": "data 2", "type": "Custom File"}
+    )
+    assert custom.type == "Custom File"
 
 
-def test_material_type_validator():
-    valid_material_json = {
-        "@id": "material_001",
-        "name": "material 1",
-        "type": "Extract Name",
-    }
-
-    invalid_material_json = {
-        "@id": "material_002",
-        "name": "material 2",
-        "type": "Custom Material",  # This is not a valid material type
-    }
-
-    assert Material.model_validate(valid_material_json)
-
-    with pytest.raises(ValidationError):
-        Material.model_validate(invalid_material_json)
+def test_material_type_is_free_text():
+    # The type is not restricted to a fixed list of values
+    assert Material.model_validate(
+        {"@id": "material_001", "name": "material 1", "type": "Extract Name"}
+    )
+    custom = Material.model_validate(
+        {"@id": "material_002", "name": "material 2", "type": "Custom Material"}
+    )
+    assert custom.type == "Custom Material"
 
 
 def test_target_repo_comment_validator():
