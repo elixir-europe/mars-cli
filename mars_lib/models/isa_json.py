@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 
 from enum import Enum
-from typing import List, Optional, Union
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from mars_lib.target_repo import TargetRepository, TARGET_REPO_KEY
 
@@ -13,20 +12,20 @@ class IsaBase(BaseModel):
 
 
 class Comment(IsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    name: Optional[str] = None
-    value: Optional[str] = None
+    id: str | None = Field(alias="@id", default=None)
+    name: str | None = None
+    value: str | None = None
 
 
 class CommentedIsaBase(IsaBase):
-    comments: List[Comment] = []
+    comments: list[Comment] | None = None
 
 
 class OntologySourceReference(CommentedIsaBase):
-    description: Optional[str] = None
-    file: Optional[str] = None
-    name: Optional[str] = None
-    version: Optional[str] = None
+    description: str | None = None
+    file: str | None = None
+    name: str | None = None
+    version: str | None = None
 
 
 # TODO: Question: Should these be case-sensitive?
@@ -50,9 +49,9 @@ DATA_TYPE_VALUES = {item.value for item in DataTypeEnum}
 
 
 class Data(CommentedIsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    name: Optional[str] = None
-    type: Optional[DataTypeEnum] = None
+    id: str | None = Field(alias="@id", default=None)
+    name: str | None = None
+    type: DataTypeEnum | None = None
 
     @field_validator("type")
     def apply_enum(cls, v: str) -> str:
@@ -62,12 +61,10 @@ class Data(CommentedIsaBase):
 
 
 class OntologyAnnotation(CommentedIsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    annotationValue: Union[Optional[str], Optional[float], Optional[int]] = Field(
-        default=None
-    )
-    termAccession: Optional[str] = None
-    termSource: Optional[str] = Field(
+    id: str | None = Field(alias="@id", default=None)
+    annotationValue: str | float | int | None = None
+    termAccession: str | None = None
+    termSource: str | None = Field(
         description="The abbreviated ontology name. It should correspond to one of the sources as specified in the ontologySourceReference section of the Investigation.",
         default=None,
     )
@@ -75,67 +72,67 @@ class OntologyAnnotation(CommentedIsaBase):
 
 # TODO: QUESTION: comments field is not mentioned in the specs (https://isa-specs.readthedocs.io/en/latest/isajson.html#material-attribute-value-schema-json)
 class MaterialAttributeValue(CommentedIsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    category: Optional[MaterialAttribute] = None
-    value: Union[str, float, int, OntologyAnnotation, None] = None
-    unit: Optional[OntologyAnnotation] = None
+    id: str | None = Field(alias="@id", default=None)
+    category: MaterialAttribute | None = None
+    value: str | float | int | OntologyAnnotation | None = None
+    unit: OntologyAnnotation | None = None
 
 
 class Factor(CommentedIsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    factorName: Optional[str] = None
-    factorType: Optional[OntologyAnnotation] = None
+    id: str | None = Field(alias="@id", default=None)
+    factorName: str | None = None
+    factorType: OntologyAnnotation | None = None
 
 
 class FactorValue(IsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    category: Optional[Factor] = None
-    value: Union[str, float, int, OntologyAnnotation, None] = None
-    unit: Optional[OntologyAnnotation] = None
+    id: str | None = Field(alias="@id", default=None)
+    category: Factor | None = None
+    value: str | float | int | OntologyAnnotation | None = None
+    unit: OntologyAnnotation | None = None
 
 
 # TODO: QUESTION: comments field is not mentioned in the specs (https://isa-specs.readthedocs.io/en/latest/isajson.html#material-attribute-value-schema-json)
 class Source(CommentedIsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    characteristics: List[MaterialAttributeValue] = []
-    name: Optional[str] = None
+    id: str | None = Field(alias="@id", default=None)
+    characteristics: list[MaterialAttributeValue] = []
+    name: str | None = None
 
 
 # TODO: QUESTION: comments field is not mentioned in the specs (https://isa-specs.readthedocs.io/en/latest/isajson.html#material-attribute-value-schema-json)
 class Sample(CommentedIsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    name: Optional[str] = None
-    characteristics: List[MaterialAttributeValue] = []
-    factorValues: Optional[List[FactorValue]] = None
-    derivesFrom: List[Source] = []
+    id: str | None = Field(alias="@id", default=None)
+    name: str | None = None
+    characteristics: list[MaterialAttributeValue] = []
+    factorValues: list[FactorValue] | None = None
+    derivesFrom: list[Source] = []
 
 
 class ProtocolParameter(IsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    parameterName: Optional[OntologyAnnotation] = None
+    id: str | None = Field(alias="@id", default=None)
+    parameterName: OntologyAnnotation | None = None
 
 
 class ProcessParameterValue(IsaBase):
-    category: Optional[ProtocolParameter] = None
-    value: Union[str, float, int, OntologyAnnotation, None] = None
-    unit: Union[OntologyAnnotation, List[OntologyAnnotation], None] = None
+    category: ProtocolParameter | None = None
+    value: str | float | int | OntologyAnnotation | None = None
+    unit: OntologyAnnotation | list[OntologyAnnotation] | None = None
 
 
 # Helper class for protocol -> components
 class Component(IsaBase):
-    componentName: Optional[str] = None
-    componentType: Optional[OntologyAnnotation] = None
+    componentName: str | None = None
+    componentType: OntologyAnnotation | None = None
 
 
 class Protocol(CommentedIsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    components: List[Component] = []
-    description: Optional[str] = None
-    name: Optional[str] = None
-    parameters: List[ProtocolParameter] = []
-    protocolType: Optional[OntologyAnnotation] = None
-    uri: Optional[str] = None
-    version: Optional[str] = None
+    id: str | None = Field(alias="@id", default=None)
+    components: list[Component] = []
+    description: str | None = None
+    name: str | None = None
+    parameters: list[ProtocolParameter] = []
+    protocolType: OntologyAnnotation | None = None
+    uri: str | None = None
+    version: str | None = None
 
 
 # Enum for material -> type
@@ -147,11 +144,11 @@ class MaterialTypeEnum(str, Enum):
 
 
 class Material(CommentedIsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    characteristics: List[MaterialAttributeValue] = []
-    name: Optional[str] = None
-    type: Optional[str] = None
-    derivesFrom: List[Material] = []
+    id: str | None = Field(alias="@id", default=None)
+    characteristics: list[MaterialAttributeValue] = []
+    name: str | None = None
+    type: str | None = None
+    derivesFrom: list[Material] = []
 
     @field_validator("type")
     def apply_enum(cls, v: str) -> str:
@@ -161,40 +158,40 @@ class Material(CommentedIsaBase):
 
 
 class Process(CommentedIsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    date: Optional[str] = None
-    executesProtocol: Optional[Protocol] = None
-    inputs: Optional[Union[List[Source], List[Sample], List[Material], list[Data]]] = []
-    name: Optional[str] = None
-    nextProcess: Optional[Process] = None
-    outputs: Optional[Union[List[Sample], List[Material], list[Data]]] = Field(
+    id: str | None = Field(alias="@id", default=None)
+    date: str | None = None
+    executesProtocol: Protocol | None = None
+    inputs: list[Source] | list[Sample] | list[Material] | list[Data] = []
+    name: str | None = None
+    nextProcess: Process | None = None
+    outputs: list[Sample] | list[Material] | list[Data] = Field(
         default=[]
     )
-    parameterValues: List[ProcessParameterValue] = []
-    performer: Optional[str] = None
-    previousProcess: Optional[Process] = None
+    parameterValues: list[ProcessParameterValue] = []
+    performer: str | None = None
+    previousProcess: Process | None = None
 
 
 # Helper for assay -> materials
 class AssayMaterialType(IsaBase):
-    samples: List[Sample] = []
-    otherMaterials: List[Material] = []
+    samples: list[Sample] = []
+    otherMaterials: list[Material] = []
 
 
 class Assay(CommentedIsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    characteristicCategories: List[MaterialAttribute] = []
-    dataFiles: List[Data] = []
-    filename: Optional[str] = None
-    materials: Optional[AssayMaterialType] = None
-    measurementType: Optional[OntologyAnnotation] = None
-    processSequence: List[Process] = []
-    technologyPlatform: Optional[str] = None
-    technologyType: Optional[OntologyAnnotation] = None
-    unitCategories: List[OntologyAnnotation] = []
+    id: str | None = Field(alias="@id", default=None)
+    characteristicCategories: list[MaterialAttribute] = []
+    dataFiles: list[Data] = []
+    filename: str | None = None
+    materials: AssayMaterialType | None = None
+    measurementType: OntologyAnnotation | None = None
+    processSequence: list[Process] = []
+    technologyPlatform: str | None = None
+    technologyType: OntologyAnnotation | None = None
+    unitCategories: list[OntologyAnnotation] = []
 
     @field_validator("filename")
-    def validate_filename(cls, v: str) -> Union[str, None]:
+    def validate_filename(cls, v: str) -> str | None:
         if v is None:
             return v
         elif re.match(r"^a_", v):
@@ -203,7 +200,7 @@ class Assay(CommentedIsaBase):
             raise ValueError("'filename' should start with 'a_'")
 
     @field_validator("comments")
-    def detect_target_repo_comments(cls, v: List[Comment]) -> Optional[List[Comment]]:
+    def detect_target_repo_comments(cls, v: list[Comment]) -> list[Comment] | None:
         target_repo_comments = [
             comment for comment in v if comment.name == TARGET_REPO_KEY
         ]
@@ -223,58 +220,58 @@ class Assay(CommentedIsaBase):
 
 
 class Person(CommentedIsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    address: Optional[str] = None
-    affiliation: Optional[str] = None
-    email: Optional[str] = None
-    fax: Optional[str] = None
-    firstName: Optional[str] = None
-    lastName: Optional[str] = None
-    midInitials: Optional[str] = None
-    phone: Optional[str] = None
-    roles: List[OntologyAnnotation] = []
+    id: str | None = Field(alias="@id", default=None)
+    address: str | None = None
+    affiliation: str | None = None
+    email: str | None = None
+    fax: str | None = None
+    firstName: str | None = None
+    lastName: str | None = None
+    midInitials: str | None = None
+    phone: str | None = None
+    roles: list[OntologyAnnotation] = []
 
 
 class Publication(CommentedIsaBase):
-    authorList: Optional[str] = None
-    doi: Optional[str] = None
-    pubMedID: Optional[str] = None
-    status: Optional[OntologyAnnotation] = None
-    title: Optional[str] = None
+    authorList: str | None = None
+    doi: str | None = None
+    pubMedID: str | None = None
+    status: OntologyAnnotation | None = None
+    title: str | None = None
 
 
 class StudyMaterialType(IsaBase):
-    sources: List[Source] = []
-    samples: List[Sample] = []
-    otherMaterials: List[Material] = []
+    sources: list[Source] = []
+    samples: list[Sample] = []
+    otherMaterials: list[Material] = []
 
 
 class MaterialAttribute(IsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    characteristicType: Optional[OntologyAnnotation] = None
+    id: str | None = Field(alias="@id", default=None)
+    characteristicType: OntologyAnnotation | None = None
 
 
 class Study(CommentedIsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    assays: List[Assay] = []
-    characteristicCategories: List[MaterialAttribute] = []
-    description: Optional[str] = None
-    factors: List[Factor] = []
-    filename: Optional[str] = None
-    identifier: Optional[str] = None
-    materials: Optional[StudyMaterialType] = None
-    people: List[Person] = []
-    processSequence: List[Process] = []
-    protocols: List[Protocol] = []
-    publicReleaseDate: Optional[str] = None
-    publications: List[Publication] = []
-    studyDesignDescriptors: List[OntologyAnnotation] = []
-    submissionDate: Optional[str] = None
-    title: Optional[str] = None
-    unitCategories: List[OntologyAnnotation] = []
+    id: str | None = Field(alias="@id", default=None)
+    assays: list[Assay] = []
+    characteristicCategories: list[MaterialAttribute] = []
+    description: str | None = None
+    factors: list[Factor] = []
+    filename: str | None = None
+    identifier: str | None = None
+    materials: StudyMaterialType | None = None
+    people: list[Person] = []
+    processSequence: list[Process] = []
+    protocols: list[Protocol] = []
+    publicReleaseDate: str | None = None
+    publications: list[Publication] = []
+    studyDesignDescriptors: list[OntologyAnnotation] = []
+    submissionDate: str | None = None
+    title: str | None = None
+    unitCategories: list[OntologyAnnotation] = []
 
     @field_validator("filename")
-    def validate_filename(cls, v: str) -> Union[str, None]:
+    def validate_filename(cls, v: str) -> str | None:
         if v is None:
             return v
         elif re.match(r"^s_", v):
@@ -284,20 +281,20 @@ class Study(CommentedIsaBase):
 
 
 class Investigation(CommentedIsaBase):
-    id: Optional[str] = Field(alias="@id", default=None)
-    description: Optional[str] = None
-    filename: Optional[str] = None
-    identifier: Optional[str] = None
-    ontologySourceReferences: List[OntologySourceReference] = Field(default=[])
-    people: List[Person] = []
-    publicReleaseDate: Optional[str] = None
-    publications: List[Publication] = []
-    studies: List[Study] = []
-    submissionDate: Optional[str] = None
-    title: Optional[str] = None
+    id: str | None = Field(alias="@id", default=None)
+    description: str | None = None
+    filename: str | None = None
+    identifier: str | None = None
+    ontologySourceReferences: list[OntologySourceReference] = []
+    people: list[Person] = []
+    publicReleaseDate: str | None = None
+    publications: list[Publication] = []
+    studies: list[Study] = []
+    submissionDate: str | None = None
+    title: str | None = None
 
     @field_validator("filename")
-    def validate_filename(cls, v: str) -> Union[str, None]:
+    def validate_filename(cls, v: str) -> str | None:
         if v is None:
             return v
         elif re.match(r"^i_", v):

@@ -8,32 +8,60 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError, SchemaError
 from typing import Union, Any, Optional, List
 
-# -- #
-# Hardcoded values
-# -- #
-biosamples_endpoints = {
-    "prod": "https://www.ebi.ac.uk/biosamples/samples/",
-    "dev": "https://wwwdev.ebi.ac.uk/biosamples/samples/",
-}
-input_json_schema_filepath = "./mars_lib/input-schema.json"
+from mars_lib.isa_json import detect_target_repo_comment
+from mars_lib.models.isa_json import Investigation, Assay, Sample
+from requests import Response, HTTPError
+
+from mars_lib.target_repo import TargetRepository
 
 
-# -- #
-# Code blocks
-# -- #
-def load_json_file(file: str) -> Any:
-    """
-    Function to load a JSON file as a dictionary.
-    Args:
-        file (str): Path to the file to be loaded.
-    """
-    if not os.path.exists(file):
-        raise FileNotFoundError(f"The file '{file}' does not exist.")
-    if not os.path.isfile(file):
-        raise ValueError(f"The path '{file}' is not a file.")
-    if not file.endswith(".json"):
-        raise ValueError(
-            f"The given file '{file}' is not a JSON file based on its extension."
+def _extract_accessions(investigation: Investigation) -> list[dict[str, Any]]:
+    studies = []
+
+    for study in investigation.studies:
+        study_materials  = getattr(study, "materials", {})
+        study_samples = getattr(study_materials, "samples", [])
+        study_dict = {'title': study.title, 'id': study.id}
+        accessions = [
+            {
+                'id': assay.id,
+                'title': getattr(assay, "title", ""),
+                'accession': _fetch_assay_accession(assay),
+                'target_repo': _fetch_assay_target_repo(assay),
+                'biosamples': _biosamples_used_in_assay(study_samples, assay)
+             }
+            for assay in study.assays
+        ]
+        study_dict.update({'assays': accessions})
+        studies.append(study_dict)
+
+    return studies
+
+def _biosamples_used_in_assay(all_biosamples: list[Sample], assay: Assay) -> list[Sample]:
+    filter(
+        lambda sample: , all_biosamples)
+
+def _fetch_assay_target_repo(assay:Assay) -> str:
+    return detect_target_repo_comment(assay.comments).value
+
+def _fetch_assay_accession(assay: Assay) -> str | ValueError:
+    accession_comment = next(
+        filter(
+            lambda comment: "assay_accession" in comment.name.lower(),
+            assay.comments
+        ),
+        None
+    )
+    if accession_comment is None:
+        return ValueError(f"Accession characteristic not found in assay '[{assay.id}] - {assay.title}'!")
+
+    return accession_comment.value
+
+def _get_accession_comment_from_a(material: Material) -> str:
+    accession_characteristic = next(
+        filter(
+            lambda characteristic: characteristic.category.characteristcType.annotationValue.lower() == 'accession',
+            material.characteristics
         )
 
     try:

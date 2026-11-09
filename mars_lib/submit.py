@@ -34,7 +34,6 @@ from pydantic import ValidationError
 
 from mars_lib.ftp_upload import FTPUploader
 from pathlib import Path
-from typing import List
 
 
 def save_step_to_file(time_stamp: float, filename: str, investigation: Investigation):
@@ -58,7 +57,7 @@ def submission(
     urls: dict[str, Any],
     file_transfer: str,
     output: str,
-    data_file_paths: List[TextIOWrapper] = [],
+    data_file_paths: list[TextIOWrapper] = [],
 ) -> None:
     # If credential manager info found:
     # Get password from the credential manager
@@ -393,7 +392,7 @@ def submit_to_ena(
 
 
 def upload_to_ena(
-    file_paths: List[Path],
+    file_paths: list[Path],
     user_credentials: dict[str, str],
     submission_url: str,
     file_transfer: str,
