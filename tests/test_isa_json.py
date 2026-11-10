@@ -406,27 +406,6 @@ def test_filename_validation():
     assert Assay.model_validate({"@id": "6", "filename": "a_Good_File_Name"})
 
 
-def test_filename_validation_arc_style():
-    assert Investigation.model_validate(
-        {"@id": "1", "filename": "isa.investigation.xlsx"}
-    )
-    assert Study.model_validate(
-        {"@id": "2", "filename": "studies/MyStudy/isa.study.xlsx"}
-    )
-    assert Assay.model_validate(
-        {"@id": "3", "filename": "assays/MyAssay/isa.assay.xlsx"}
-    )
-    assert Assay.model_validate(
-        {"@id": "4", "filename": r"assays\MyAssay\isa.assay.xlsx"}
-    )
-
-    # An ARC file name of the wrong kind is still rejected
-    with pytest.raises(ValidationError, match="'filename' should start with 's_'"):
-        Study.model_validate({"@id": "5", "filename": "isa.assay.xlsx"})
-    with pytest.raises(ValidationError, match="'filename' should start with 'a_'"):
-        Assay.model_validate({"@id": "6", "filename": "isa.assay.xlsx.bak"})
-
-
 @pytest.mark.parametrize(
     "filename, prefix, arc_kind, expected",
     [
@@ -476,6 +455,7 @@ def test_is_valid_filename(filename, prefix, arc_kind, expected):
         (Study, "s_study.txt"),
         (Assay, "isa.assay.xlsx"),
         (Assay, "assays/MyAssay/isa.assay.xlsx"),
+        (Assay, r"assays\MyAssay\isa.assay.xlsx"),
         (Assay, "a_assay.txt"),
     ],
 )
@@ -484,25 +464,32 @@ def test_filename_validation_accepts_valid_names(model, filename):
     assert parsed.filename == filename
 
 
+FILENAME_ERRORS = {
+    Investigation: "'filename' should start with 'i_' or be named 'isa.investigation.xlsx'",
+    Study: "'filename' should start with 's_' or be named 'isa.study.xlsx'",
+    Assay: "'filename' should start with 'a_' or be named 'isa.assay.xlsx'",
+}
+
+
 @pytest.mark.parametrize(
-    "model, prefix, filename",
+    "model, filename",
     [
-        (Investigation, "i_", "isa.study.xlsx"),
-        (Investigation, "i_", "isa.assay.xlsx"),
-        (Study, "s_", "isa.investigation.xlsx"),
-        (Study, "s_", "isa.assay.xlsx"),
-        (Assay, "a_", "isa.investigation.xlsx"),
-        (Assay, "a_", "isa.study.xlsx"),
-        (Assay, "a_", "assays/MyAssay/isa.assay.xlsx.bak"),
-        (Study, "s_", "studies/isa.study.xlsx/notes.txt"),
+        (Investigation, "isa.study.xlsx"),
+        (Investigation, "isa.assay.xlsx"),
+        (Study, "isa.investigation.xlsx"),
+        (Study, "isa.assay.xlsx"),
+        (Assay, "isa.investigation.xlsx"),
+        (Assay, "isa.study.xlsx"),
+        (Assay, "isa.assay.xlsx.bak"),
+        (Assay, "assays/MyAssay/isa.assay.xlsx.bak"),
+        (Study, "studies/isa.study.xlsx/notes.txt"),
     ],
 )
-def test_filename_validation_rejects_invalid_names(model, prefix, filename):
+def test_filename_validation_rejects_invalid_names(model, filename):
     with pytest.raises(ValidationError) as error:
         model.model_validate({"@id": "1", "filename": filename})
     # The message names both accepted forms
-    assert f"'filename' should start with '{prefix}'" in str(error.value)
-    assert "isa." in str(error.value)
+    assert FILENAME_ERRORS[model] in str(error.value)
 
 
 @pytest.mark.parametrize("model", [Investigation, Study, Assay])

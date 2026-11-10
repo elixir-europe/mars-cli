@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 from enum import Enum
 from typing import List, Optional, Union
 from pydantic import BaseModel, Field, field_validator, ConfigDict
@@ -187,9 +185,19 @@ def _is_valid_filename(filename: str, prefix: str, arc_kind: str) -> bool:
     (for example 'studies/my_study/isa.study.xlsx'). For ARC names only the
     last path segment is checked.
     """
-    if re.match(rf"^{prefix}_", filename):
+    if filename.startswith(f"{prefix}_"):
         return True
     return filename.replace("\\", "/").split("/")[-1] == f"isa.{arc_kind}.xlsx"
+
+
+def _validate_filename(
+    filename: Optional[str], prefix: str, arc_kind: str
+) -> Optional[str]:
+    if filename is None or _is_valid_filename(filename, prefix, arc_kind):
+        return filename
+    raise ValueError(
+        f"'filename' should start with '{prefix}_' or be named 'isa.{arc_kind}.xlsx'"
+    )
 
 
 class Assay(CommentedIsaBase):
@@ -205,15 +213,8 @@ class Assay(CommentedIsaBase):
     unitCategories: List[OntologyAnnotation] = []
 
     @field_validator("filename")
-    def validate_filename(cls, v: str) -> Union[str, None]:
-        if v is None:
-            return v
-        elif _is_valid_filename(v, "a", "assay"):
-            return v
-        else:
-            raise ValueError(
-                "'filename' should start with 'a_' or be named 'isa.assay.xlsx'"
-            )
+    def validate_filename(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_filename(v, "a", "assay")
 
     @field_validator("comments")
     def detect_target_repo_comments(cls, v: List[Comment]) -> Optional[List[Comment]]:
@@ -287,15 +288,8 @@ class Study(CommentedIsaBase):
     unitCategories: List[OntologyAnnotation] = []
 
     @field_validator("filename")
-    def validate_filename(cls, v: str) -> Union[str, None]:
-        if v is None:
-            return v
-        elif _is_valid_filename(v, "s", "study"):
-            return v
-        else:
-            raise ValueError(
-                "'filename' should start with 's_' or be named 'isa.study.xlsx'"
-            )
+    def validate_filename(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_filename(v, "s", "study")
 
 
 class Investigation(CommentedIsaBase):
@@ -312,12 +306,5 @@ class Investigation(CommentedIsaBase):
     title: Optional[str] = None
 
     @field_validator("filename")
-    def validate_filename(cls, v: str) -> Union[str, None]:
-        if v is None:
-            return v
-        elif _is_valid_filename(v, "i", "investigation"):
-            return v
-        else:
-            raise ValueError(
-                "'filename' should start with 'i_' or be named 'isa.investigation.xlsx'"
-            )
+    def validate_filename(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_filename(v, "i", "investigation")
