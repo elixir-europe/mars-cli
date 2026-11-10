@@ -220,6 +220,8 @@ Options:
   --help                          Show this message and exit.
 ```
 
+__IMPORTANT:__ All the data files in the ISA-JSON should have a __UNIQUE__ name.
+
 ### Development vs production
 
 By default, the mars-CLI will try to submit the ISA-JSON's metadata towards the repositories' production servers.
@@ -434,4 +436,3 @@ python mars_cli.py --credential-service-name metabolights  --username-credential
 ## Deploy repository services
 
 [To set up and run the MARS tool locally using Docker, follow these steps](../repository-services/README.md)
-
