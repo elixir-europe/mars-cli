@@ -45,6 +45,9 @@ py-modules = ["mars_cli"]
 [tool.setuptools.packages.find]
 include = ["mars_lib", "mars_lib.*"]
 
+[tool.setuptools.package-data]
+mars_lib = ["*.json"]
+
 [tool.ruff.lint]
 # Keep the rule set the project was linted with before ruff widened its defaults
 select = ["E4", "E7", "E9", "F"]

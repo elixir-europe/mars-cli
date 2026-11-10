@@ -4,6 +4,7 @@ import requests
 import json
 import re
 import os
+from pathlib import Path
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError, SchemaError
 from typing import Union, Any, Optional, List
@@ -15,7 +16,13 @@ biosamples_endpoints = {
     "prod": "https://www.ebi.ac.uk/biosamples/samples/",
     "dev": "https://wwwdev.ebi.ac.uk/biosamples/samples/",
 }
-input_json_schema_filepath = "./mars_lib/input-schema.json"
+webin_token_endpoints = {
+    "prod": "https://www.ebi.ac.uk/ena/submit/webin/auth/token",
+    "dev": "https://wwwdev.ebi.ac.uk/ena/dev/submit/webin/auth/token",
+}
+# Resolved relative to this module so it works from any working directory and
+# from an installed package.
+input_json_schema_filepath = str(Path(__file__).parent / "biosamples-input-schema.json")
 
 
 # -- #
@@ -46,7 +53,7 @@ def load_json_file(file: str) -> Any:
         )
 
 
-def handle_input_dict(input: dict[str, str]) -> Optional[dict[str, str]]:
+def handle_input_dict(input: Union[dict[str, Any], str]) -> dict[str, Any]:
     """
     Function to handle the input: assert that it's either a dictionary or
         the filepath to an existing file containing the dictionary
@@ -141,6 +148,14 @@ def validate_json_against_schema(
         raise SchemaError(f"Schema error: {e.message}")
 
 
+def _ext_ref_key(ext_ref: dict[str, Any]) -> tuple[str, tuple[str, ...]]:
+    """
+    Identity of an external reference, matching how BioSamples compares them:
+        same url and same set of DUO codes. A missing "duo" equals an empty one.
+    """
+    return ext_ref["url"], tuple(sorted(ext_ref.get("duo") or []))
+
+
 class BiosamplesRecord:
     """
     Class representing a record for biosamples to be extended.
@@ -162,6 +177,16 @@ class BiosamplesRecord:
         self.biosamples_credentials: Optional[dict[str, str]] = None
         self.biosamples_externalReferences: List[str] = []
         self.production: bool = False
+        self.bs_json: dict[str, Any] = {}
+        self.biosamples_endpoint: Optional[str] = None
+
+    def _get_endpoint(self) -> str:
+        """
+        The endpoint the record was fetched from, otherwise the one matching `production`.
+        """
+        if self.biosamples_endpoint:
+            return self.biosamples_endpoint
+        return biosamples_endpoints["prod" if self.production else "dev"]
 
     def display(self) -> None:
         """
@@ -171,20 +196,23 @@ class BiosamplesRecord:
         print("Biosamples External References:", self.biosamples_externalReferences)
         print("Production Mode:", self.production)
 
-    def fetch_bs_json(self, biosamples_endpoint: str) -> Optional[dict[str, Any]]:
+    def fetch_bs_json(
+        self, biosamples_endpoint: str, header: Optional[dict[str, str]] = None
+    ) -> Optional[dict[str, Any]]:
         """
         Fetches the BioSample's record (JSON) of the accession.
 
         Args:
             biosamples_endpoint (str): The endpoint to be used to fetch the record's JSON.
+            header (dict, optional): HTTP headers for the request. Public records can be
+                fetched anonymously, private ones need the submitter's Authorization header.
         """
 
+        self.biosamples_endpoint = biosamples_endpoint
         self.biosamples_url = f"{biosamples_endpoint}{self.bs_accession}.json"
 
         try:
-            r = requests.get(
-                self.biosamples_url
-            )  # No auth token needed, it's public info
+            r = requests.get(self.biosamples_url, headers=header)
 
             if r.status_code != 200:
                 raise RuntimeError(
@@ -244,28 +272,22 @@ class BiosamplesRecord:
     def extend_externalReferences(
         self, new_ext_refs_list: List[dict[str, str]]
     ) -> dict[str, Any]:
-        """Extends the JSON of the BioSample's record with new externalReferences"""
+        """
+        Extends the JSON of the BioSample's record with new externalReferences.
+            Existing references keep their order, new ones are appended and
+            references already present on the record are skipped.
+        """
         if not self.bs_json:
-            endpoint = (
-                biosamples_endpoints["prod"]
-                if self.production
-                else biosamples_endpoints["dev"]
-            )
-            self.fetch_bs_json(endpoint)
+            self.fetch_bs_json(self._get_endpoint())
         self.pop_links()
 
-        if "externalReferences" not in self.bs_json:
-            ext_refs_list = new_ext_refs_list
-        else:
-            existing_ext_refs_list = self.bs_json["externalReferences"]
-
-            # Convert dictionaries to JSON strings and add them to a set for deduplication
-            unique_refs_set = set(
-                json.dumps(dic) for dic in existing_ext_refs_list + new_ext_refs_list
-            )
-
-            # Convert JSON strings back to dictionaries
-            ext_refs_list = [json.loads(dic_str) for dic_str in unique_refs_set]
+        ext_refs_list: List[dict[str, Any]] = []
+        seen_refs: set[tuple[str, tuple[str, ...]]] = set()
+        for ext_ref in self.bs_json.get("externalReferences", []) + new_ext_refs_list:
+            key = _ext_ref_key(ext_ref)
+            if key not in seen_refs:
+                seen_refs.add(key)
+                ext_refs_list.append(ext_ref)
 
         self.bs_json["externalReferences"] = ext_refs_list
         return self.bs_json
@@ -280,7 +302,7 @@ class BiosamplesRecord:
             header (dict): The HTTP headers to use in the request.
             webin_auth (str, optional): The authentication provider for WEBIN.
         """
-        update_url = f"{self.biosamples_url}{webin_auth}"
+        update_url = f"{self._get_endpoint()}{self.bs_accession}{webin_auth}"
         updated_json = json.dumps(self.bs_json)
 
         try:
