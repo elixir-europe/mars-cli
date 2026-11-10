@@ -206,7 +206,9 @@ Options:
   --output TEXT
   --submit-to-metabolights BOOLEAN
                                   Submit to Metabolights.
-  --data-files FILENAME           Path of files to upload
+  --data-folder DIRECTORY         Path to a folder holding the files to upload.
+                                  All files in the folder (recursively) are
+                                  included. Can be passed multiple times.
   --file-transfer TEXT            provide the name of a file transfer
                                   solution, like ftp or aspera
   --submit-to-ena BOOLEAN         Submit to ENA.
@@ -290,7 +292,7 @@ mars-cli submit --submit-to-ena False my-credentials my-isa-json.json
 
 > **Note**: Following command line will submit isa-file and data-file using FTP solution to Biosamples and  ENA:
 ```sh
-mars-cli submit --submit-to-metabolights False --file-transfer ftp --data-files ../data/file_to_upload.fastq.gz my-credentials my-isa-json.json
+mars-cli submit --submit-to-metabolights False --file-transfer ftp --data-folder ../data my-credentials my-isa-json.json
 ```
 
 #### Metabolights submissions
@@ -382,7 +384,7 @@ python mars_cli.py --development submit --submit-to-metabolights False --submit-
 ### Submit data files and isa-json and to biosamples and ENA
 
 ```bash
-python mars_cli.py --credential-service-name biosamples  --username-credentials <username> --file-transfer ftp --data-files ../data/ENA_data.R1.fastq.gz --submit-to-metabolights False --output final-isa ../data/biosamples-input-isa.json
+python mars_cli.py --credential-service-name biosamples  --username-credentials <username> --file-transfer ftp --data-folder ../data --submit-to-metabolights False --output final-isa ../data/biosamples-input-isa.json
 ```
 
 ### Submit data files and isa-json to Metabolights
@@ -390,7 +392,7 @@ python mars_cli.py --credential-service-name biosamples  --username-credentials 
 Work in progress, currently data transfer is not supported yet.
 
 ```bash
-python mars_cli.py --credential-service-name metabolights  --username-credentials <username> --file-transfer ftp --data-files ../data/metpro-analysis.txt <additional *.mzml data files> --submit-to-biosamples False --submit-to-ena False --output final-isa ../data/metabolights-input-isa.json
+python mars_cli.py --credential-service-name metabolights  --username-credentials <username> --file-transfer ftp --data-folder ../data/ISA-BH2024-ALL --submit-to-biosamples False --submit-to-ena False --output final-isa ../data/metabolights-input-isa.json
 ```
 
 ## Deploy repository services
