@@ -76,7 +76,7 @@
           "key": "dataFiles",
           "where": {
             "key": "@id",
-            "value": "#data/334"
+            "value": "#data_file/334"
           }
         }
       ]

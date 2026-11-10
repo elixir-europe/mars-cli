@@ -106,7 +106,7 @@ def test_load_json_file():
 
 
 def test_handle_input_dict():
-    input = "MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json"
+    input = "MARS/test-data/biosamples-input-isa.json"
     assert handle_input_dict(input)
 
     not_a_json = "./tests/fixtures/bad_json.json"
