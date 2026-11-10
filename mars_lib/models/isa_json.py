@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from enum import Enum
 from typing import List, Optional, Union
 from pydantic import BaseModel, Field, field_validator, ConfigDict
@@ -179,15 +181,27 @@ class AssayMaterialType(IsaBase):
     otherMaterials: List[Material] = []
 
 
+ARC_FILENAMES = {
+    "investigation": r"isa\.investigation\.xlsx",
+    "study": r"studies/[^/\\]+/isa\.study\.xlsx",
+    "assay": r"assays/[^/\\]+/isa\.assay\.xlsx",
+}
+
+ARC_FILENAME_EXAMPLES = {
+    "investigation": "isa.investigation.xlsx",
+    "study": "studies/<name>/isa.study.xlsx",
+    "assay": "assays/<name>/isa.assay.xlsx",
+}
+
+
 def _is_valid_filename(filename: str, prefix: str, arc_kind: str) -> bool:
     """
-    Accept ISA-Tab style names (for example 's_study.txt') and ARC style names
-    (for example 'studies/my_study/isa.study.xlsx'). For ARC names only the
-    last path segment is checked.
+    Accept ISA-Tab style names (for example 's_study.txt') and names that follow
+    the ARC layout (for example 'studies/my_study/isa.study.xlsx').
     """
-    if filename.startswith(f"{prefix}_"):
-        return True
-    return filename.replace("\\", "/").split("/")[-1] == f"isa.{arc_kind}.xlsx"
+    return filename.startswith(f"{prefix}_") or bool(
+        re.fullmatch(ARC_FILENAMES[arc_kind], filename)
+    )
 
 
 def _validate_filename(
@@ -196,7 +210,8 @@ def _validate_filename(
     if filename is None or _is_valid_filename(filename, prefix, arc_kind):
         return filename
     raise ValueError(
-        f"'filename' should start with '{prefix}_' or be named 'isa.{arc_kind}.xlsx'"
+        f"'filename' should start with '{prefix}_' "
+        f"or be '{ARC_FILENAME_EXAMPLES[arc_kind]}'"
     )
 
 

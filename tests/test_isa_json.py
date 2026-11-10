@@ -414,20 +414,32 @@ def test_filename_validation():
         ("s_study.txt", "s", "study", True),
         ("a_assay.txt", "a", "assay", True),
         ("a_", "a", "assay", True),
-        # ARC style names, with and without folders
+        # ARC layout
         ("isa.investigation.xlsx", "i", "investigation", True),
-        ("isa.study.xlsx", "s", "study", True),
         ("studies/MyStudy/isa.study.xlsx", "s", "study", True),
         ("assays/MyAssay/isa.assay.xlsx", "a", "assay", True),
-        (r"assays\MyAssay\isa.assay.xlsx", "a", "assay", True),
-        ("/absolute/path/isa.assay.xlsx", "a", "assay", True),
-        # Wrong kind of ARC file
+        # ARC file for a different ISA level
         ("isa.assay.xlsx", "s", "study", False),
         ("isa.study.xlsx", "a", "assay", False),
         ("isa.investigation.xlsx", "s", "study", False),
-        # Only the last path segment counts
+        ("studies/MyStudy/isa.study.xlsx", "a", "assay", False),
+        ("assays/MyAssay/isa.assay.xlsx", "s", "study", False),
+        # ARC file names outside the ARC folder layout
+        ("isa.study.xlsx", "s", "study", False),
+        ("isa.assay.xlsx", "a", "assay", False),
+        ("studies/isa.study.xlsx", "s", "study", False),
+        ("studies/MyStudy/Sub/isa.study.xlsx", "s", "study", False),
+        ("studies//isa.study.xlsx", "s", "study", False),
+        ("/etc/isa.assay.xlsx", "a", "assay", False),
+        ("../../isa.assay.xlsx", "a", "assay", False),
+        ("../assays/MyAssay/isa.assay.xlsx", "a", "assay", False),
+        ("/assays/MyAssay/isa.assay.xlsx", "a", "assay", False),
+        (r"C:\x\isa.assay.xlsx", "a", "assay", False),
+        (r"assays\MyAssay\isa.assay.xlsx", "a", "assay", False),
+        ("studies/Foo/isa.assay.xlsx", "a", "assay", False),
+        ("assays/MyAssay/isa.assay.xlsx/notes.txt", "a", "assay", False),
         ("isa.assay.xlsx/other.txt", "a", "assay", False),
-        ("assays/isa.assay.xlsx/notes.txt", "a", "assay", False),
+        ("assays/MyAssay/isa.assay.xlsx\n", "a", "assay", False),
         # Near misses
         ("isa.assay.xlsx.bak", "a", "assay", False),
         ("xisa.assay.xlsx", "a", "assay", False),
@@ -450,12 +462,9 @@ def test_is_valid_filename(filename, prefix, arc_kind, expected):
     [
         (Investigation, "isa.investigation.xlsx"),
         (Investigation, "i_investigation.txt"),
-        (Study, "isa.study.xlsx"),
         (Study, "studies/MyStudy/isa.study.xlsx"),
         (Study, "s_study.txt"),
-        (Assay, "isa.assay.xlsx"),
         (Assay, "assays/MyAssay/isa.assay.xlsx"),
-        (Assay, r"assays\MyAssay\isa.assay.xlsx"),
         (Assay, "a_assay.txt"),
     ],
 )
@@ -465,9 +474,9 @@ def test_filename_validation_accepts_valid_names(model, filename):
 
 
 FILENAME_ERRORS = {
-    Investigation: "'filename' should start with 'i_' or be named 'isa.investigation.xlsx'",
-    Study: "'filename' should start with 's_' or be named 'isa.study.xlsx'",
-    Assay: "'filename' should start with 'a_' or be named 'isa.assay.xlsx'",
+    Investigation: "'filename' should start with 'i_' or be 'isa.investigation.xlsx'",
+    Study: "'filename' should start with 's_' or be 'studies/<name>/isa.study.xlsx'",
+    Assay: "'filename' should start with 'a_' or be 'assays/<name>/isa.assay.xlsx'",
 }
 
 
@@ -483,6 +492,14 @@ FILENAME_ERRORS = {
         (Assay, "isa.assay.xlsx.bak"),
         (Assay, "assays/MyAssay/isa.assay.xlsx.bak"),
         (Study, "studies/isa.study.xlsx/notes.txt"),
+        # Right file name, wrong folder layout
+        (Study, "isa.study.xlsx"),
+        (Assay, "isa.assay.xlsx"),
+        (Assay, "/etc/isa.assay.xlsx"),
+        (Assay, "../../isa.assay.xlsx"),
+        (Assay, r"C:\x\isa.assay.xlsx"),
+        (Assay, r"assays\MyAssay\isa.assay.xlsx"),
+        (Assay, "studies/Foo/isa.assay.xlsx"),
     ],
 )
 def test_filename_validation_rejects_invalid_names(model, filename):
@@ -496,6 +513,17 @@ def test_filename_validation_rejects_invalid_names(model, filename):
 def test_filename_validation_allows_missing_filename(model):
     assert model.model_validate({"@id": "1"}).filename is None
     assert model.model_validate({"@id": "1", "filename": None}).filename is None
+
+
+def test_load_arc_example():
+    investigation = load_investigation("MARS/test-data/ARC-ISA-example.json")
+    assert isinstance(investigation, Investigation)
+    assert investigation.filename == "isa.investigation.xlsx"
+    assert len(investigation.studies) == 2
+    for study in investigation.studies:
+        assert re.fullmatch(r"studies/[^/]+/isa\.study\.xlsx", study.filename)
+        for assay in study.assays:
+            assert re.fullmatch(r"assays/[^/]+/isa\.assay\.xlsx", assay.filename)
 
 
 def test_map_data_files_to_repositories():
