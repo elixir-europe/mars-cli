@@ -22,7 +22,7 @@ def print_and_log(msg, level="info"):
 
 def init_logging(config: ConfigParser, fallback_log_file: Path) -> None:
     # Logging configuration
-    log_level = config.get("logging", "log_level", fallback="ERROR")
+    log_level = config.get("logging", "log_level", fallback="INFO")
     log_file = config.get("logging", "log_file", fallback=fallback_log_file)
     log_max_size = int(
         config.get("logging", "log_max_size", fallback="1024")

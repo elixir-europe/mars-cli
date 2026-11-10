@@ -89,7 +89,7 @@ To regenerate the default settings, delete the `settings.ini` file and run the C
 
 ```
 [logging]
-log_level = ERROR
+log_level = INFO
 log_file = /my/logging/directory/.mars/app.log
 log_max_size = 1024
 log_max_files = 5
@@ -132,7 +132,7 @@ __log_level__: The verbosity of logging can be set to three different levels
 - WARNING: Warnings, errors and critical messages will be logged.
 - INFO: All events are logged.
 - DEBUG: For debugging purpose only. __Not recommended as it might log more sensitive information!__
-The default setting is ERROR. So only errors are logged!
+The default setting is INFO. So all events are logged, except debug messages. Existing settings files keep their current value, so change `log_level` there if you want the new default.
 
 __log_file__: The path to the log file. By default this will be in `$HOME/.mars/app.log`.
 
@@ -349,6 +349,9 @@ mars-cli check-data-files --data-folder ../data my-isa-json.json
 
 Use `--data-folder` multiple times to pass more than one folder. Each folder is searched recursively.
 
+The same check runs automatically at the start of `submit`: the report is logged, and the submission is aborted before
+anything is sent to a target repository if a data file referenced in the ISA-JSON is missing.
+
 The command reports:
 
 - how many data files could be matched to a data file in the ISA-JSON,
@@ -363,6 +366,9 @@ Data file check for ISA JSON with investigation 'My investigation':
 Not referenced in the ISA JSON: ../data/not-in-isa.fastq
 Missing data file: rna-seq-data-3.fastq
 ```
+
+Like all other output of the CLI, the report is written through the logger. Unreferenced files are logged as
+warnings and missing data files as errors. The counts are logged at INFO level, which is the default `log_level`.
 
 The command exits with a non-zero status when any data file in the ISA-JSON has no match, so it can be used as a gate
 in scripts and CI.

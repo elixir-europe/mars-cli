@@ -246,25 +246,16 @@ def validate_investigation(isa_json_file):
 )
 def check_data_files_command(isa_json_file, data_folder):
     """Check that the data files in the ISA JSON match the files in the data folders."""
-    investigation = load_investigation(isa_json_file)
+    investigation = load_investigation(isa_json_file.name)
 
     if isinstance(investigation, ValidationError):
         raise investigation
 
     report = check_data_files(list_files_in_folders(data_folder), investigation)
 
-    # The report is the command's output, so it is echoed directly instead of
-    # going through the logger (which hides INFO messages by default).
-    click.echo(
-        f"Data file check for ISA JSON with investigation '{investigation.title}':\n"
-        f"- Data files matched to a data file in the ISA JSON: {len(report.matched)}\n"
-        f"- Data files not referenced in the ISA JSON: {len(report.unreferenced)}\n"
-        f"- ISA JSON data files without a matching data file: {len(report.missing)}"
+    report.log(
+        f"Data file check for ISA JSON with investigation '{investigation.title}':"
     )
-    for file in report.unreferenced:
-        click.echo(f"Not referenced in the ISA JSON: {file}")
-    for name in report.missing:
-        click.echo(f"Missing data file: {name}")
 
     if report.missing:
         sys.exit(1)

@@ -597,6 +597,22 @@ class DataFileCheckReport:
     unreferenced: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
 
+    def log(self, header: str = "Data file check:") -> None:
+        """
+        Logs the report: the counts at INFO level, every unreferenced file as a
+        WARNING and every missing data file as an ERROR.
+        """
+        print_and_log(
+            f"{header}\n"
+            f"- Data files matched to a data file in the ISA JSON: {len(self.matched)}\n"
+            f"- Data files not referenced in the ISA JSON: {len(self.unreferenced)}\n"
+            f"- ISA JSON data files without a matching data file: {len(self.missing)}"
+        )
+        for file in self.unreferenced:
+            print_and_log(f"Not referenced in the ISA JSON: {file}", level="warning")
+        for name in self.missing:
+            print_and_log(f"Missing data file: {name}", level="error")
+
 
 def check_data_files(
     files: list[str], investigation: Investigation
