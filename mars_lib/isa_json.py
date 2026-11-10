@@ -1,5 +1,5 @@
 import json
-from typing import Union, List, Any, Tuple, Optional, Dict
+from typing import Any
 
 from mars_lib.logging import print_and_log
 from mars_lib.models.isa_json import (
@@ -57,11 +57,11 @@ def reduce_investigation_for_target_repo(
     return filtered_investigation
 
 
-def detect_target_repo_comment(comments: List[Comment]) -> Comment:
+def detect_target_repo_comment(comments: list[Comment]) -> Comment:
     """Will detect the comment that contains the target repository.
 
     Args:
-        comments (List[Comment]): List of comments.
+        comments (list[Comment]): List of comments.
 
     Returns:
         Comment: The comment where the name corresponds with the name of the provided target repo.
@@ -89,7 +89,7 @@ def is_assay_for_target_repo(assay: Assay, target_repo: str) -> bool:
         return False
 
 
-def load_investigation(file_path: str) -> Union[Investigation, ValidationError]:
+def load_investigation(file_path: str) -> Investigation | ValidationError:
     """
     Reads the file and validates it as a valid ISA JSON.
 
@@ -99,7 +99,7 @@ def load_investigation(file_path: str) -> Union[Investigation, ValidationError]:
         file_path (str): Path to ISA JSON as string.
 
     Returns:
-        Union[Investigation, ValidationError]: Depending on the validation, returns the investigation or a pydantic validation error.
+        Investigation | ValidationError: Depending on the validation, returns the investigation or a pydantic validation error.
     """
     with open(file_path, "r") as json_file:
         data = json.load(json_file)
@@ -107,7 +107,7 @@ def load_investigation(file_path: str) -> Union[Investigation, ValidationError]:
     return Investigation.model_validate(data)
 
 
-def get_filter_for_accession_key(accession: Accession, key: str) -> Optional[Filter]:
+def get_filter_for_accession_key(accession: Accession, key: str) -> Filter | None:
     """
     Returns the studies node from the accession.
 
@@ -121,13 +121,13 @@ def get_filter_for_accession_key(accession: Accession, key: str) -> Optional[Fil
     return next((p.where for p in accession.path if p.key == key), None)
 
 
-def apply_filter(filter: Filter, nodes: Union[List[Study], List[Assay]]) -> Any:
+def apply_filter(filter: Filter, nodes: list[Study] | list[Assay]) -> Any:
     """
     Filters the studies based on the filter.
 
     Args:
         filter (Filter): The filter to be applied.
-        studies (List[Study]): The studies to be filtered.
+        studies (list[Study]): The studies to be filtered.
 
     Returns:
        Study: The filtered study.
@@ -152,12 +152,12 @@ def accession_data_file_comment_present(node: DataFile) -> bool:
         return False
 
 
-def accession_characteristic_category_present(node: Union[Study, Assay]) -> bool:
+def accession_characteristic_category_present(node: Study | Assay) -> bool:
     """
     Checks if the node has an accession characteristic category.
 
     Args:
-        node (Union[Study, Assay]): The study or assay to be checked.
+        node (Study | Assay): The study or assay to be checked.
 
     Returns:
         bool: Boolean indicating whether the node has an accession characteristic category.
@@ -180,13 +180,13 @@ def accession_characteristic_category_present(node: Union[Study, Assay]) -> bool
 
 
 def accession_characteristic_present(
-    node: Union[Study, Assay], material_type_path: Path
+    node: Study | Assay, material_type_path: Path
 ) -> bool:
     """
     Checks if the node has an accession characteristic.
 
     Args:
-        node (Union[Study, Assay]): The study or assay to be checked.
+        node (Study | Assay): The study or assay to be checked.
         material_type_path (Path): The path to the material type.
 
     Returns:
@@ -298,13 +298,13 @@ def add_accession_to_data_file_node(node: DataFile, accession_number: str) -> No
 
 
 def create_accession_characteristic_category(
-    node: Union[Study, Assay],
-) -> Tuple[str, MaterialAttribute]:
+    node: Study | Assay,
+) -> tuple[str, MaterialAttribute]:
     """
     creates a new characteristic category for the accession number.
 
     Args:
-        node (Union[Study, Assay]): node to be updated
+        node (Study | Assay): node to be updated
 
     Returns:
         MaterialAttribute: The newly created characteristic category.
@@ -342,13 +342,13 @@ def fetch_existing_accession_data_file_comment(node: DataFile) -> Comment:
 
 
 def fetch_existing_characteristic_category(
-    node: Union[Study, Assay],
-) -> Tuple[str, MaterialAttribute]:
+    node: Study | Assay,
+) -> tuple[str, MaterialAttribute]:
     """
     Fetches the existing characteristic category for the accession number.
 
     Args:
-        node (Union[Study, Assay]): study or assay to search
+        node (Study | Assay): study or assay to search
     """
     accession_cat = next(
         char_cat
@@ -368,7 +368,7 @@ def fetch_existing_characteristic_category(
 
 
 def create_accession_characteristic(
-    node: Union[Study, Assay],
+    node: Study | Assay,
     material_type_path: Path,
     category: MaterialAttribute,
     accession_id: str,
@@ -377,7 +377,7 @@ def create_accession_characteristic(
     Creates a new characteristic for the accession number.
 
     Args:
-        node (Union[Study, Assay]): node to be updated
+        node (Study | Assay): node to be updated
         material_type_path (Path): path to the material type,
         category (MaterialAttribute): characteristic category for the accession number.
         accession_id (str): UUID for the accession.
@@ -495,11 +495,11 @@ def update_investigation(
 
 
 def map_data_files_to_repositories(
-    files: List[str], investigation: Investigation
-) -> Dict[str, List[str]]:
+    files: list[str], investigation: Investigation
+) -> dict[str, list[str]]:
     # Note: This works well in
-    df_map: Dict[str, List[str]] = {}
-    assays: List[Assay] = [
+    df_map: dict[str, list[str]] = {}
+    assays: list[Assay] = [
         assay for study in investigation.studies for assay in study.assays
     ]
 
