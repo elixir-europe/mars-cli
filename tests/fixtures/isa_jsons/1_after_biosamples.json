@@ -1,4 +1,5 @@
 {
+  "@id": "#investigation/bobs_investigation",
   "comments": [
     {
       "name": "ISAjson export time",
@@ -53,6 +54,7 @@
   "publications": [],
   "studies": [
     {
+      "@id": "#study/arabidopsis_thaliana",
       "comments": [
         {
           "name": "SEEK Study ID",
@@ -111,7 +113,7 @@
                   "value": ""
                 }
               ],
-              "@id": "#data/334",
+              "@id": "#data_file/334",
               "name": "ENA_TEST2.R2.fastq.gz",
               "type": "Raw Data File"
             }
@@ -197,7 +199,7 @@
               "name": "",
               "nextProcess": {
                 "comments": [],
-                "@id": "#process/library_construction/332",
+                "@id": "#process/library_construction/333",
                 "inputs": [],
                 "outputs": [],
                 "parameterValues": []
@@ -214,7 +216,7 @@
               "performer": "",
               "previousProcess": {
                 "comments": [],
-                "@id": "#process/sample_collection/332",
+                "@id": "#process/sample_collection/331",
                 "inputs": [],
                 "outputs": [],
                 "parameterValues": []
@@ -240,7 +242,7 @@
               "name": "",
               "nextProcess": {
                 "comments": [],
-                "@id": "#process/nucleic_acid_sequencing/333",
+                "@id": "#process/nucleic_acid_sequencing/334",
                 "inputs": [],
                 "outputs": [],
                 "parameterValues": []
@@ -345,7 +347,7 @@
               "performer": "",
               "previousProcess": {
                 "comments": [],
-                "@id": "#process/nucleic_acid_extraction/333",
+                "@id": "#process/nucleic_acid_extraction/332",
                 "inputs": [],
                 "outputs": [],
                 "parameterValues": []
@@ -404,7 +406,7 @@
               "performer": "",
               "previousProcess": {
                 "comments": [],
-                "@id": "#process/library_construction/334",
+                "@id": "#process/library_construction/333",
                 "inputs": [],
                 "outputs": [],
                 "parameterValues": []
