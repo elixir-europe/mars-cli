@@ -58,7 +58,7 @@ def submission(
     urls: dict[str, Any],
     file_transfer: str,
     output: str,
-    data_file_paths: list[TextIOWrapper] = [],
+    data_file_paths: list[str] = [],
 ) -> None:
     # If credential manager info found:
     # Get password from the credential manager
