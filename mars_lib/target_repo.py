@@ -92,13 +92,9 @@ class TargetRepository(str, Enum):
                         "development-submission-url",
                         fallback="https://wwwdev.ebi.ac.uk/biosamples/samples/",
                     ),
-                    # BioSamples itself, to read and update records. The URLs above
-                    # can point to the MARS BioSamples service instead.
-                    "SAMPLES": config.get(
-                        "biosamples",
-                        "development-samples-url",
-                        fallback="https://wwwdev.ebi.ac.uk/biosamples/samples/",
-                    ),
+                    # BioSamples itself, to read and update records. Not configurable:
+                    # the URLs above can point to the MARS BioSamples service instead.
+                    "SAMPLES": "https://wwwdev.ebi.ac.uk/biosamples/samples/",
                 },
             },
             "PROD": {
@@ -169,11 +165,7 @@ class TargetRepository(str, Enum):
                         "production-submission-url",
                         fallback="https://www.ebi.ac.uk/biosamples/samples/",
                     ),
-                    "SAMPLES": config.get(
-                        "biosamples",
-                        "production-samples-url",
-                        fallback="https://www.ebi.ac.uk/biosamples/samples/",
-                    ),
+                    "SAMPLES": "https://www.ebi.ac.uk/biosamples/samples/",
                 },
             },
         }
