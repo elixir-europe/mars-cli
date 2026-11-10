@@ -33,7 +33,18 @@ TOKEN_POST = "mars_lib.authentication.requests.post"
 BS_FIXTURE = "./tests/fixtures/SAMEA112654119.json"
 EXT_REFS_INPUT = "./tests/test_input.json"
 DEV_ENDPOINT = biosamples_endpoints["dev"]
-DEV_URLS = TargetRepository.get_repository_urls_from_config(ConfigParser())["DEV"]
+
+# Settings as in the PoC workflow: submissions go through the MARS BioSamples service
+_POC_CONFIG = ConfigParser()
+_POC_CONFIG.read_dict(
+    {
+        "biosamples": {
+            "development-url": "http://localhost:8032/isabiosamples",
+            "development-submission-url": "http://localhost:8032/isabiosamples/submit",
+        }
+    }
+)
+DEV_URLS = TargetRepository.get_repository_urls_from_config(_POC_CONFIG)["DEV"]
 ENA_STUDY_PAGE = "https://wwwdev.ebi.ac.uk/ena/browser/view/"
 MTBLS_STUDY_PAGE = "https://www-test.ebi.ac.uk/metabolights/"
 # Sample 'leaf 1', the one used in the ENA assay of the fixture below
@@ -311,7 +322,9 @@ def test_build_external_references():
 def test_register_external_references_in_biosamples(put_status, log_level):
     with (
         mock.patch(TOKEN_POST, return_value=_response(text="the-token")) as post,
-        mock.patch(GET, return_value=_response(payload={"accession": LEAF_ACCESSION})),
+        mock.patch(
+            GET, return_value=_response(payload={"accession": LEAF_ACCESSION})
+        ) as get,
         mock.patch(
             PUT, return_value=_response(status_code=put_status, text="{}")
         ) as put,
@@ -326,9 +339,9 @@ def test_register_external_references_in_biosamples(put_status, log_level):
         )
 
     assert post.call_args.args[0].startswith(DEV_URLS["WEBIN"]["TOKEN"])
-    assert put.call_args.args[0].startswith(
-        f"{DEV_URLS['BIOSAMPLES']['SERVICE']}{LEAF_ACCESSION}"
-    )
+    # Records are read and updated on BioSamples itself, not via the MARS service
+    assert get.call_args.args[0] == f"{DEV_ENDPOINT}{LEAF_ACCESSION}.json"
+    assert put.call_args.args[0].startswith(f"{DEV_ENDPOINT}{LEAF_ACCESSION}")
     assert json.loads(put.call_args.kwargs["data"])["externalReferences"] == [
         {"url": f"{ENA_STUDY_PAGE}ERP208805"}
     ]

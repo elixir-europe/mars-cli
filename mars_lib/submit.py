@@ -498,7 +498,7 @@ def register_external_references_in_biosamples(
         create_external_references(
             biosamples_credentials=user_credentials[AuthProvider.WEBIN.value],
             biosamples_externalReferences=ext_refs,
-            biosamples_url=urls["BIOSAMPLES"]["SERVICE"],
+            biosamples_url=urls["BIOSAMPLES"]["SAMPLES"],
             webin_token_url=urls["WEBIN"]["TOKEN"],
         )
     except Exception as err:

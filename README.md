@@ -154,6 +154,11 @@ study pages, used to link the submitted studies to the BioSamples records (see
 [Extending BioSamples' records](#feature--extending-biosamples-records)). They default to the ENA browser
 (`https://www.ebi.ac.uk/ena/browser/view/`) and MetaboLights (`https://www.ebi.ac.uk/metabolights/`) pages.
 
+BioSamples also has a `development-samples-url` and `production-samples-url`: the BioSamples samples API used to
+read and update the BioSamples records for those links. Set these separately because `development-url` and
+`development-submission-url` may point to the MARS BioSamples service instead. They default to
+`https://wwwdev.ebi.ac.uk/biosamples/samples/` and `https://www.ebi.ac.uk/biosamples/samples/`.
+
 ## Usage
 
 If you wish to use a different location for the `.mars' folder:
