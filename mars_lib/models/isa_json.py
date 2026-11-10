@@ -135,6 +135,38 @@ class AssayMaterialType(IsaBase):
     otherMaterials: list[Material] = []
 
 
+ARC_FILENAMES = {
+    "investigation": r"isa\.investigation\.xlsx",
+    "study": r"studies/[^/\\]+/isa\.study\.xlsx",
+    "assay": r"assays/[^/\\]+/isa\.assay\.xlsx",
+}
+
+ARC_FILENAME_EXAMPLES = {
+    "investigation": "isa.investigation.xlsx",
+    "study": "studies/<name>/isa.study.xlsx",
+    "assay": "assays/<name>/isa.assay.xlsx",
+}
+
+
+def _is_valid_filename(filename: str, prefix: str, arc_kind: str) -> bool:
+    """
+    Accept ISA-Tab style names (for example 's_study.txt') and names that follow
+    the ARC layout (for example 'studies/my_study/isa.study.xlsx').
+    """
+    return filename.startswith(f"{prefix}_") or bool(
+        re.fullmatch(ARC_FILENAMES[arc_kind], filename)
+    )
+
+
+def _validate_filename(filename: str | None, prefix: str, arc_kind: str) -> str | None:
+    if filename is None or _is_valid_filename(filename, prefix, arc_kind):
+        return filename
+    raise ValueError(
+        f"'filename' should start with '{prefix}_' "
+        f"or be '{ARC_FILENAME_EXAMPLES[arc_kind]}'"
+    )
+
+
 class Assay(CommentedIsaBase):
     id: str | None = Field(alias="@id", default=None)
     characteristicCategories: list[MaterialAttribute] = []
@@ -148,13 +180,8 @@ class Assay(CommentedIsaBase):
     unitCategories: list[OntologyAnnotation] = []
 
     @field_validator("filename")
-    def validate_filename(cls, v: str) -> str | None:
-        if v is None:
-            return v
-        elif re.match(r"^a_", v):
-            return v
-        else:
-            raise ValueError("'filename' should start with 'a_'")
+    def validate_filename(cls, v: str | None) -> str | None:
+        return _validate_filename(v, "a", "assay")
 
     @field_validator("comments")
     def detect_target_repo_comments(cls, v: list[Comment]) -> list[Comment] | None:
@@ -228,13 +255,8 @@ class Study(CommentedIsaBase):
     unitCategories: list[OntologyAnnotation] = []
 
     @field_validator("filename")
-    def validate_filename(cls, v: str) -> str | None:
-        if v is None:
-            return v
-        elif re.match(r"^s_", v):
-            return v
-        else:
-            raise ValueError("'filename' should start with 's_'")
+    def validate_filename(cls, v: str | None) -> str | None:
+        return _validate_filename(v, "s", "study")
 
 
 class Investigation(CommentedIsaBase):
@@ -251,10 +273,5 @@ class Investigation(CommentedIsaBase):
     title: str | None = None
 
     @field_validator("filename")
-    def validate_filename(cls, v: str) -> str | None:
-        if v is None:
-            return v
-        elif re.match(r"^i_", v):
-            return v
-        else:
-            raise ValueError("'filename' should start with 'i_'")
+    def validate_filename(cls, v: str | None) -> str | None:
+        return _validate_filename(v, "i", "investigation")
