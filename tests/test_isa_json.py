@@ -18,6 +18,7 @@ from mars_lib.models.isa_json import (
     Person,
     Investigation,
     Study,
+    _is_valid_filename,
 )
 from mars_lib.models.repository_response import RepositoryResponse
 import json
@@ -424,6 +425,90 @@ def test_filename_validation_arc_style():
         Study.model_validate({"@id": "5", "filename": "isa.assay.xlsx"})
     with pytest.raises(ValidationError, match="'filename' should start with 'a_'"):
         Assay.model_validate({"@id": "6", "filename": "isa.assay.xlsx.bak"})
+
+
+@pytest.mark.parametrize(
+    "filename, prefix, arc_kind, expected",
+    [
+        # ISA-Tab style names
+        ("i_investigation.txt", "i", "investigation", True),
+        ("s_study.txt", "s", "study", True),
+        ("a_assay.txt", "a", "assay", True),
+        ("a_", "a", "assay", True),
+        # ARC style names, with and without folders
+        ("isa.investigation.xlsx", "i", "investigation", True),
+        ("isa.study.xlsx", "s", "study", True),
+        ("studies/MyStudy/isa.study.xlsx", "s", "study", True),
+        ("assays/MyAssay/isa.assay.xlsx", "a", "assay", True),
+        (r"assays\MyAssay\isa.assay.xlsx", "a", "assay", True),
+        ("/absolute/path/isa.assay.xlsx", "a", "assay", True),
+        # Wrong kind of ARC file
+        ("isa.assay.xlsx", "s", "study", False),
+        ("isa.study.xlsx", "a", "assay", False),
+        ("isa.investigation.xlsx", "s", "study", False),
+        # Only the last path segment counts
+        ("isa.assay.xlsx/other.txt", "a", "assay", False),
+        ("assays/isa.assay.xlsx/notes.txt", "a", "assay", False),
+        # Near misses
+        ("isa.assay.xlsx.bak", "a", "assay", False),
+        ("xisa.assay.xlsx", "a", "assay", False),
+        ("isa.assay.xls", "a", "assay", False),
+        ("ISA.ASSAY.XLSX", "a", "assay", False),
+        ("assay.txt", "a", "assay", False),
+        ("A_assay.txt", "a", "assay", False),
+        (" a_assay.txt", "a", "assay", False),
+        ("", "a", "assay", False),
+        # The ISA-Tab prefix is only checked at the start of the whole name
+        ("studies/a_assay.txt", "a", "assay", False),
+    ],
+)
+def test_is_valid_filename(filename, prefix, arc_kind, expected):
+    assert _is_valid_filename(filename, prefix, arc_kind) is expected
+
+
+@pytest.mark.parametrize(
+    "model, filename",
+    [
+        (Investigation, "isa.investigation.xlsx"),
+        (Investigation, "i_investigation.txt"),
+        (Study, "isa.study.xlsx"),
+        (Study, "studies/MyStudy/isa.study.xlsx"),
+        (Study, "s_study.txt"),
+        (Assay, "isa.assay.xlsx"),
+        (Assay, "assays/MyAssay/isa.assay.xlsx"),
+        (Assay, "a_assay.txt"),
+    ],
+)
+def test_filename_validation_accepts_valid_names(model, filename):
+    parsed = model.model_validate({"@id": "1", "filename": filename})
+    assert parsed.filename == filename
+
+
+@pytest.mark.parametrize(
+    "model, prefix, filename",
+    [
+        (Investigation, "i_", "isa.study.xlsx"),
+        (Investigation, "i_", "isa.assay.xlsx"),
+        (Study, "s_", "isa.investigation.xlsx"),
+        (Study, "s_", "isa.assay.xlsx"),
+        (Assay, "a_", "isa.investigation.xlsx"),
+        (Assay, "a_", "isa.study.xlsx"),
+        (Assay, "a_", "assays/MyAssay/isa.assay.xlsx.bak"),
+        (Study, "s_", "studies/isa.study.xlsx/notes.txt"),
+    ],
+)
+def test_filename_validation_rejects_invalid_names(model, prefix, filename):
+    with pytest.raises(ValidationError) as error:
+        model.model_validate({"@id": "1", "filename": filename})
+    # The message names both accepted forms
+    assert f"'filename' should start with '{prefix}'" in str(error.value)
+    assert "isa." in str(error.value)
+
+
+@pytest.mark.parametrize("model", [Investigation, Study, Assay])
+def test_filename_validation_allows_missing_filename(model):
+    assert model.model_validate({"@id": "1"}).filename is None
+    assert model.model_validate({"@id": "1", "filename": None}).filename is None
 
 
 def test_map_data_files_to_repositories():
