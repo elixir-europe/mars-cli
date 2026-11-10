@@ -14,9 +14,8 @@ from mars_lib.authentication import (
 )
 from mars_lib.biosamples_external_references import (
     get_header,
-    biosamples_endpoints,
-    webin_token_endpoints,
     BiosamplesRecord,
+    build_external_references,
     handle_input_dict,
     validate_json_against_schema,
     input_json_schema_filepath,
@@ -201,6 +200,20 @@ def submission(
             f"Submission to {TargetRepository.EVA.value} was successful.", level="info"
         )
         # TODO: Update `investigation`, based on the receipt returned
+
+    # Link the new repository studies to the BioSamples records they were made from
+    study_page_urls = {
+        repo.value: urls[repo.name]["STUDY-PAGE"]
+        for repo in (TargetRepository.ENA, TargetRepository.METABOLIGHTS)
+        if repo.value in target_repositories
+    }
+    if study_page_urls:
+        register_external_references_in_biosamples(
+            investigation=investigation,
+            user_credentials=user_credentials,
+            study_page_urls=study_page_urls,
+            urls=urls,
+        )
 
     # Return the updated ISA JSON
     with open(f"{output}.json", "w") as f:
@@ -413,37 +426,90 @@ def upload_to_ena(
 def create_external_references(
     biosamples_credentials: dict[str, str],
     biosamples_externalReferences: dict[str, Any] | str,
-    production: bool,
+    biosamples_url: str,
+    webin_token_url: str,
 ) -> None:
     """
     Adds externalReferences to existing BioSamples records.
+        Every record is attempted; the ones that could not be updated are reported together afterwards.
 
     Args:
     biosamples_credentials: Dictionary with the credentials of the submitter of the existing Biosamples records.
     biosamples_externalReferences: Dictionary, or path to a JSON file, mapping BioSamples accessions to the
         externalReferences to add. Must follow 'biosamples-input-schema.json'.
-    production: Boolean indicating the environment of BioSamples to use.
+    biosamples_url: BioSamples samples endpoint, e.g. 'https://wwwdev.ebi.ac.uk/biosamples/samples/'.
+    webin_token_url: Webin URL to request the authentication token from.
     """
-    environment = "prod" if production else "dev"
-    biosamples_endpoint = biosamples_endpoints[environment]
+    biosamples_endpoint = f"{biosamples_url.rstrip('/')}/"
 
     ext_refs_input = handle_input_dict(biosamples_externalReferences)
     validate_json_against_schema(
         json_doc=ext_refs_input, json_schema=input_json_schema_filepath
     )
-    token = get_webin_auth_token(
-        biosamples_credentials, auth_base_url=webin_token_endpoints[environment]
-    )
+    token = get_webin_auth_token(biosamples_credentials, auth_base_url=webin_token_url)
     if not token:
         raise ValueError("The token could not be generated.")
     header = get_header(token)
 
+    failures = []
     for biosample_r in ext_refs_input["biosampleExternalReferences"]:
         bs_accession = biosample_r["biosampleAccession"]
-        BSrecord = BiosamplesRecord(bs_accession)
-        BSrecord.fetch_bs_json(biosamples_endpoint, header=header)
-        # To test it without the fetching, you can download it manually and then use:
-        #   BSrecord.load_bs_json(bs_json_file="downloaded-json.json")
-        new_ext_refs_list = biosample_r["externalReferences"]
-        BSrecord.extend_externalReferences(new_ext_refs_list)
-        BSrecord.update_remote_record(header)
+        try:
+            BSrecord = BiosamplesRecord(bs_accession)
+            BSrecord.fetch_bs_json(biosamples_endpoint, header=header)
+            BSrecord.extend_externalReferences(biosample_r["externalReferences"])
+            BSrecord.update_remote_record(header)
+        except (RuntimeError, ValueError) as err:
+            failures.append(f"{bs_accession}: {err}")
+
+    if failures:
+        raise RuntimeError(
+            "Could not add the external references to these BioSamples records:\n"
+            + "\n".join(failures)
+        )
+
+
+def register_external_references_in_biosamples(
+    investigation: Investigation,
+    user_credentials: dict[str, dict[str, str]],
+    study_page_urls: dict[str, str],
+    urls: dict[str, Any],
+) -> None:
+    """
+    Adds a link to the repository study of each assay to the BioSamples records of the samples in that assay.
+        The submission itself already succeeded at this point, so problems are logged as a warning instead of raised.
+
+    Args:
+    investigation: ISA-JSON, updated with the receipts of the target repositories.
+    user_credentials: Credentials per authentication provider. Uses the Webin ones.
+    study_page_urls: Target repository mapped to the base URL of its study pages.
+    urls: Repository URLs of the selected environment.
+    """
+    try:
+        ext_refs = build_external_references(investigation, study_page_urls)
+        if not ext_refs["biosampleExternalReferences"]:
+            print_and_log(
+                f"No BioSamples records to link to the {', '.join(study_page_urls)} studies: "
+                "the submitted assays have no study accession or no samples with a BioSamples accession.",
+                level="warning",
+            )
+            return
+
+        create_external_references(
+            biosamples_credentials=user_credentials[AuthProvider.WEBIN.value],
+            biosamples_externalReferences=ext_refs,
+            biosamples_url=urls["BIOSAMPLES"]["SERVICE"],
+            webin_token_url=urls["WEBIN"]["TOKEN"],
+        )
+    except Exception as err:
+        print_and_log(
+            f"The submission succeeded, but the BioSamples records could not be linked to it. Details:\n{err}",
+            level="warning",
+        )
+        return
+
+    print_and_log(
+        f"Linked the {', '.join(study_page_urls)} studies to "
+        f"{len(ext_refs['biosampleExternalReferences'])} BioSamples record(s).",
+        level="info",
+    )

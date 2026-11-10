@@ -1,5 +1,6 @@
 import copy
 import json
+from configparser import ConfigParser
 from unittest import mock
 
 import pytest
@@ -8,18 +9,47 @@ from jsonschema.exceptions import ValidationError
 from mars_lib.biosamples_external_references import (
     BiosamplesRecord,
     biosamples_endpoints,
+    build_external_references,
     input_json_schema_filepath,
     load_json_file,
     handle_input_dict,
     get_header,
     validate_bs_accession,
     validate_json_against_schema,
-    webin_token_endpoints,
 )
-from mars_lib.submit import create_external_references
+from mars_lib.isa_json import load_investigation, update_investigation
+from mars_lib.models.isa_json import Comment
+from mars_lib.models.repository_response import RepositoryResponse
+from mars_lib.submit import (
+    create_external_references,
+    register_external_references_in_biosamples,
+)
+from mars_lib.target_repo import TargetRepository
 
 BS_FIXTURE = "./tests/fixtures/SAMEA112654119.json"
 EXT_REFS_INPUT = "./tests/test_input.json"
+DEV_URLS = TargetRepository.get_repository_urls_from_config(ConfigParser())["DEV"]
+ENA_STUDY_PAGE = "https://wwwdev.ebi.ac.uk/ena/browser/view/"
+MTBLS_STUDY_PAGE = "https://www-test.ebi.ac.uk/metabolights/"
+# Sample 'leaf 1', the one used in the ENA assay of the fixture below
+LEAF_ACCESSION = "SAMEA131504584"
+
+
+def _investigation_after_ena_and_metabolights():
+    """ISA-JSON as `submission` leaves it after BioSamples, ENA and MetaboLights."""
+    investigation = update_investigation(
+        load_investigation("tests/fixtures/isa_jsons/1_after_biosamples.json"),
+        RepositoryResponse.from_json_file(
+            "tests/fixtures/mars_receipts/ena_success_response.json"
+        ),
+    )
+    study = investigation.studies[0]
+    mtbls_assay = study.assays[0].model_copy(deep=True)
+    mtbls_assay.id = "#assay/mtbls"
+    mtbls_assay.comments = [Comment(name="target_repository", value="metabolights")]
+    study.assays.append(mtbls_assay)
+    study.comments.append(Comment(name="metabolights_accession", value="MTBLS1234"))
+    return investigation
 
 
 def _response(status_code=200, payload=None, text=""):
@@ -234,18 +264,14 @@ def test_update_remote_record_after_load_bs_json():
     assert json.loads(put.call_args.kwargs["data"]) == bs_record.bs_json
 
 
-@pytest.mark.parametrize("production", [False, True])
-def test_create_external_references(production):
-    environment = "prod" if production else "dev"
-    endpoint = biosamples_endpoints[environment]
-    records = {
-        "SAMEA112654119": load_json_file(BS_FIXTURE),
-        "SAMEA419425": {"accession": "SAMEA419425", "name": "no refs yet"},
-    }
+def test_create_external_references():
+    endpoint = "https://wwwdev.ebi.ac.uk/biosamples/samples/"
+    token_url = "https://wwwdev.ebi.ac.uk/ena/dev/submit/webin/auth/token"
 
     def fake_get(url, headers=None):
-        accession = url.removeprefix(endpoint).removesuffix(".json")
-        return _response(payload=copy.deepcopy(records[accession]))
+        if "SAMEA112654119" in url:
+            return _response(status_code=404, text="Not found")
+        return _response(payload={"accession": "SAMEA419425", "name": "no refs yet"})
 
     with (
         mock.patch(
@@ -261,34 +287,89 @@ def test_create_external_references(production):
             return_value=_response(text="{}"),
         ) as put,
     ):
-        create_external_references(
-            {"username": "Webin-00000", "password": "secret"},
-            load_json_file(EXT_REFS_INPUT),
-            production,
-        )
+        with pytest.raises(RuntimeError, match="SAMEA112654119") as error:
+            create_external_references(
+                {"username": "Webin-00000", "password": "secret"},
+                load_json_file(EXT_REFS_INPUT),
+                biosamples_url=endpoint.rstrip("/"),
+                webin_token_url=token_url,
+            )
 
-    # Token is requested from the Webin instance matching the BioSamples instance
-    assert post.call_args.args[0].startswith(webin_token_endpoints[environment])
+    assert "SAMEA419425" not in str(error.value)
+    assert post.call_args.args[0].startswith(token_url)
     # Records are fetched with the token, so private samples can be updated too
     assert all(
         c.kwargs["headers"] == get_header("the-token") for c in get.call_args_list
     )
-    assert [c.args[0] for c in put.call_args_list] == [
-        f"{endpoint}SAMEA112654119?authProvider=WEBIN",
-        f"{endpoint}SAMEA419425?authProvider=WEBIN",
-    ]
-
-    first_update, second_update = (
-        json.loads(c.kwargs["data"]) for c in put.call_args_list
-    )
-    # All input refs are already on SAMEA112654119, so nothing is added
-    assert (
-        first_update["externalReferences"]
-        == records["SAMEA112654119"]["externalReferences"]
-    )
-    assert second_update["externalReferences"] == [
+    # The record that could not be fetched does not stop the next one
+    put.assert_called_once()
+    assert put.call_args.args[0] == f"{endpoint}SAMEA419425?authProvider=WEBIN"
+    assert json.loads(put.call_args.kwargs["data"])["externalReferences"] == [
         {"url": "https://ega-archive.org/datasets/EGAD00010002458"}
     ]
+
+
+def test_build_external_references():
+    investigation = _investigation_after_ena_and_metabolights()
+
+    ext_refs = build_external_references(
+        investigation, {"ena": ENA_STUDY_PAGE, "metabolights": MTBLS_STUDY_PAGE}
+    )
+
+    # Only the sample used in the assays is linked, not the source it derives from
+    assert ext_refs == {
+        "biosampleExternalReferences": [
+            {
+                "biosampleAccession": LEAF_ACCESSION,
+                "externalReferences": [
+                    {"url": f"{ENA_STUDY_PAGE}ERP208805"},
+                    {"url": f"{MTBLS_STUDY_PAGE}MTBLS1234"},
+                ],
+            }
+        ]
+    }
+    assert validate_json_against_schema(ext_refs, input_json_schema_filepath)
+
+    # Repositories that were not submitted to in this run are not linked
+    ena_only = build_external_references(investigation, {"ena": ENA_STUDY_PAGE})
+    assert ena_only["biosampleExternalReferences"][0]["externalReferences"] == [
+        {"url": f"{ENA_STUDY_PAGE}ERP208805"}
+    ]
+
+
+@pytest.mark.parametrize("put_status, log_level", [(200, "info"), (403, "warning")])
+def test_register_external_references_in_biosamples(put_status, log_level):
+    with (
+        mock.patch(
+            "mars_lib.authentication.requests.post",
+            return_value=_response(text="the-token"),
+        ) as post,
+        mock.patch(
+            "mars_lib.biosamples_external_references.requests.get",
+            return_value=_response(payload={"accession": LEAF_ACCESSION}),
+        ),
+        mock.patch(
+            "mars_lib.biosamples_external_references.requests.put",
+            return_value=_response(status_code=put_status, text="{}"),
+        ) as put,
+        mock.patch("mars_lib.submit.print_and_log") as log,
+    ):
+        # A failing BioSamples update must not fail the finished submission
+        register_external_references_in_biosamples(
+            investigation=_investigation_after_ena_and_metabolights(),
+            user_credentials={"webin": {"username": "Webin-0", "password": "pw"}},
+            study_page_urls={"ena": DEV_URLS["ENA"]["STUDY-PAGE"]},
+            urls=DEV_URLS,
+        )
+
+    assert post.call_args.args[0].startswith(DEV_URLS["WEBIN"]["TOKEN"])
+    assert put.call_args.args[0].startswith(
+        f"{DEV_URLS['BIOSAMPLES']['SERVICE']}{LEAF_ACCESSION}"
+    )
+    assert json.loads(put.call_args.kwargs["data"])["externalReferences"] == [
+        {"url": f"{ENA_STUDY_PAGE}ERP208805"}
+    ]
+    assert log.call_args.kwargs["level"] == log_level
 
 
 def test_update_remote_record():

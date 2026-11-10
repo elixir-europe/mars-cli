@@ -41,6 +41,11 @@ class TargetRepository(str, Enum):
                         "development-data-submission-url",
                         fallback="webin2.ebi.ac.uk",
                     ),
+                    "STUDY-PAGE": config.get(
+                        "ena",
+                        "development-study-page-url",
+                        fallback="https://wwwdev.ebi.ac.uk/ena/browser/view/",
+                    ),
                 },
                 "WEBIN": {
                     "SERVICE": config.get(
@@ -69,6 +74,11 @@ class TargetRepository(str, Enum):
                         "metabolights",
                         "development-token-url",
                         fallback="https://www-test.ebi.ac.uk/metabolights/mars/ws3/auth/token",
+                    ),
+                    "STUDY-PAGE": config.get(
+                        "metabolights",
+                        "development-study-page-url",
+                        fallback="https://www-test.ebi.ac.uk/metabolights/",
                     ),
                 },
                 "BIOSAMPLES": {
@@ -101,6 +111,11 @@ class TargetRepository(str, Enum):
                         "development-data-submission-url",
                         fallback="webin2.ebi.ac.uk",
                     ),
+                    "STUDY-PAGE": config.get(
+                        "ena",
+                        "production-study-page-url",
+                        fallback="https://www.ebi.ac.uk/ena/browser/view/",
+                    ),
                 },
                 "WEBIN": {
                     "SERVICE": config.get(
@@ -129,6 +144,11 @@ class TargetRepository(str, Enum):
                         "metabolights",
                         "production-token-url",
                         fallback="https://www-test.ebi.ac.uk/metabolights/mars/ws3/auth/token",
+                    ),
+                    "STUDY-PAGE": config.get(
+                        "metabolights",
+                        "production-study-page-url",
+                        fallback="https://www.ebi.ac.uk/metabolights/",
                     ),
                 },
                 "BIOSAMPLES": {

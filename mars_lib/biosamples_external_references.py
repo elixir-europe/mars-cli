@@ -9,6 +9,16 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError, SchemaError
 from typing import Union, Any, Optional, List
 
+from mars_lib.isa_json import detect_target_repo_comment
+from mars_lib.models.isa_json import (
+    Comment,
+    Investigation,
+    OntologyAnnotation,
+    Sample,
+    Study,
+)
+from mars_lib.target_repo import TargetRepository
+
 # -- #
 # Hardcoded values
 # -- #
@@ -16,9 +26,10 @@ biosamples_endpoints = {
     "prod": "https://www.ebi.ac.uk/biosamples/samples/",
     "dev": "https://wwwdev.ebi.ac.uk/biosamples/samples/",
 }
-webin_token_endpoints = {
-    "prod": "https://www.ebi.ac.uk/ena/submit/webin/auth/token",
-    "dev": "https://wwwdev.ebi.ac.uk/ena/dev/submit/webin/auth/token",
+# Comments in which the submission stores each repository's study accession
+study_accession_comments = {
+    TargetRepository.ENA.value: f"{TargetRepository.ENA.value}_study_accession",
+    TargetRepository.METABOLIGHTS.value: "metabolights_accession",
 }
 # Resolved relative to this module so it works from any working directory and
 # from an installed package.
@@ -318,3 +329,90 @@ class BiosamplesRecord:
             raise RuntimeError(f"Error making the request. Details: {e}")
 
         return r.text
+
+
+# -- #
+# Extraction of BioSamples external references from an ISA-JSON
+# -- #
+def _get_comment_value(comments: list[Comment], name: str) -> Optional[str]:
+    return next((c.value for c in comments if c.name == name and c.value), None)
+
+
+def _get_biosamples_accession(sample: Sample, study: Study) -> Optional[str]:
+    """Returns the value of the sample's 'accession' characteristic, set after the BioSamples submission."""
+    accession_category_ids = {
+        category.id
+        for category in study.characteristicCategories
+        if category.characteristicType
+        and str(category.characteristicType.annotationValue).lower() == "accession"
+    }
+    for characteristic in sample.characteristics:
+        category = characteristic.category
+        if not category or (
+            category.id not in accession_category_ids
+            and not (
+                category.characteristicType
+                and str(category.characteristicType.annotationValue).lower()
+                == "accession"
+            )
+        ):
+            continue
+        value = characteristic.value
+        if isinstance(value, OntologyAnnotation):
+            value = value.annotationValue
+        if value:
+            return str(value)
+    return None
+
+
+def build_external_references(
+    investigation: Investigation, study_page_urls: dict[str, str]
+) -> dict[str, Any]:
+    """
+    Links the repository study of each assay to the BioSamples records of the samples used in that assay.
+
+    Args:
+        investigation (Investigation): ISA-JSON, updated with the receipts of BioSamples and the other repositories.
+        study_page_urls (dict): Target repository mapped to the base URL of its study pages, e.g.
+            {"ena": "https://www.ebi.ac.uk/ena/browser/view/"}. Other repositories are ignored.
+
+    Returns:
+        dict: Input for `create_external_references`, following 'biosamples-input-schema.json'.
+    """
+    ext_refs_per_sample: dict[str, list[dict[str, str]]] = {}
+    for study in investigation.studies:
+        study_samples = {
+            sample.id: sample
+            for sample in (study.materials.samples if study.materials else [])
+        }
+        for assay in study.assays:
+            target_repo = detect_target_repo_comment(assay.comments).value
+            if target_repo not in study_page_urls:
+                continue
+
+            # ENA stores its study accession on the assay, MetaboLights on the study
+            comment_name = study_accession_comments[target_repo]
+            study_accession = _get_comment_value(
+                assay.comments, comment_name
+            ) or _get_comment_value(study.comments, comment_name)
+            if not study_accession:
+                continue
+            url = f"{study_page_urls[target_repo].rstrip('/')}/{study_accession}"
+
+            for assay_sample in assay.materials.samples if assay.materials else []:
+                sample = study_samples.get(assay_sample.id)
+                bs_accession = (
+                    _get_biosamples_accession(sample, study) if sample else None
+                )
+                if not bs_accession:
+                    continue
+                ext_refs = ext_refs_per_sample.setdefault(bs_accession, [])
+                if {"url": url} not in ext_refs:
+                    ext_refs.append({"url": url})
+
+    return {
+        "biosampleExternalReferences": [
+            {"biosampleAccession": accession, "externalReferences": ext_refs}
+            for accession, ext_refs in ext_refs_per_sample.items()
+        ]
+    }
