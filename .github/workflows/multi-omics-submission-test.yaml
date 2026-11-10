@@ -15,7 +15,7 @@ jobs:
 
       # Paths for MARS repo and ISA templates
       REPOSITORY_SERVICES_PATH: ${{ github.workspace }}/MARS/repository-services
-      ISA_TEMPLATE_PATH: ${{ github.workspace }}/MARS/test-data/biosamples-input-isa-multi.json
+      ISA_TEMPLATE_PATH: ${{ github.workspace }}/MARS/test-data/ena-complete.json
       HOLOFOOD_ISA_TEMPLATE_PATH: ${{ github.workspace }}/MARS/test-data/HoloFoodinISA_v1.0.json
 
       # Credentials from GitHub secrets

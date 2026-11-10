@@ -294,7 +294,7 @@ def add_accession_to_material_node(
         accession_value.id = accession_annotation_id(updated_material.id)
 
 
-def accession_annotation_id(material_id: Optional[str]) -> str:
+def accession_annotation_id(material_id: str | None) -> str:
     """
     Builds the '@id' for a material's accession annotation.
 

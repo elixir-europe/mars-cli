@@ -24,13 +24,24 @@ from mars_lib.models.repository_response import RepositoryResponse
 import json
 
 
+METABOLIGHTS_ISA = "MARS/test-data/metabolights-input-isa.json"
+ENA_COMPLETE_ISA = "MARS/test-data/ena-complete.json"
+
+
+def _multi_repository_investigation():
+    """The MetaboLights LC-MS study with the ENA sequencing assay added, so one
+    investigation holds assays for two target repositories."""
+    investigation = load_investigation(METABOLIGHTS_ISA)
+    ena_assay = load_investigation(ENA_COMPLETE_ISA).studies[0].assays[0]
+    investigation.studies[0].assays.append(ena_assay)
+    return investigation
+
+
 def test_load_investigation():
     # Should test the validation process of the ISA JSON file where root level = investigation.
-    valid_investigation01 = load_investigation(
-        "MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json"
-    )
+    valid_investigation01 = load_investigation(METABOLIGHTS_ISA)
     assert len(valid_investigation01.studies) == 1
-    assert valid_investigation01.studies[0].identifier == "BH2023"
+    assert valid_investigation01.studies[0].identifier == "BH2024"
 
     valid_investigation02 = load_investigation(
         "MARS/test-data/biosamples-input-isa.json"
@@ -46,9 +57,7 @@ def test_load_investigation():
 
 
 def test_reduce_investigation_for_target_repo():
-    good_investigation = load_investigation(
-        "MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json"
-    )
+    good_investigation = _multi_repository_investigation()
 
     filtered_investigation = reduce_investigation_for_target_repo(
         good_investigation, TargetRepository.ENA.value
@@ -58,14 +67,15 @@ def test_reduce_investigation_for_target_repo():
 
     filtered_investigation_study = filtered_investigation.studies[0]
 
-    assert len(good_investigation_study.assays) == 5
+    assert len(good_investigation_study.assays) == 2
     assert len(filtered_investigation_study.assays) == 1
+    assert is_assay_for_target_repo(
+        filtered_investigation_study.assays[0], TargetRepository.ENA.value
+    )
 
 
 def test_reduce_investigation_for_biosamples():
-    good_investigation = load_investigation(
-        "MARS/test-data/ISA-BH2023-ALL/isa-bh2023-all.json"
-    )
+    good_investigation = _multi_repository_investigation()
 
     filtered_investigation = reduce_investigation_for_target_repo(
         good_investigation, TargetRepository.BIOSAMPLES.value
@@ -236,7 +246,7 @@ def test_update_study_materials_with_accession_categories():
 
 
 def test_update_study_materials_multiple_samples_from_one_source():
-    json_path = "MARS/test-data/biosamples-input-isa-multi.json"
+    json_path = ENA_COMPLETE_ISA
     with open(json_path) as json_file:
         json_data = json.load(json_file)
 
@@ -348,7 +358,7 @@ def _accession_characteristic(material, category_id):
 
 
 def test_update_material_accession_keeps_existing_value_fields():
-    investigation = load_investigation("MARS/test-data/biosamples-input-isa-multi.json")
+    investigation = load_investigation(ENA_COMPLETE_ISA)
     study = investigation.studies[0]
     accession_category_id = "#characteristic_category/accession_329"
     sources = {source.id: source for source in study.materials.sources}
@@ -701,60 +711,38 @@ def test_load_arc_example():
 
 
 def test_map_data_files_to_repositories():
-    investigation = load_investigation(
-        file_path="MARS/test-data/ISA-BH2024-ALL/isa-bh2024-all.json"
-    )
-    exact_match_files = [
-        "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-0.fastq",
-        "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-1.fastq",
-        "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-2.fastq",
-        "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-3.fastq",
-        "MARS/test-data/ISA-BH2024-ALL/metpro-analysis.txt",
-        "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--1.mzml",
-        "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--2.mzml",
-        "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--3.mzml",
-        "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--4.mzml",
-        "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-0.fastq",
-        "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-1.fastq",
-        "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-2.fastq",
-        "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-3.fastq",
+    investigation = _multi_repository_investigation()
+    # Only the file names are matched against the ISA-JSON; the files need not exist.
+    metabolights_files = [
+        "data/metpro-analysis.txt",
+        "data/ms-data-metpro--1.mzml",
+        "data/ms-data-metpro--2.mzml",
+        "data/ms-data-metpro--3.mzml",
+        "data/ms-data-metpro--4.mzml",
     ]
+    ena_files = [
+        "data/ENA_TEST2.EXP1.R1.fastq.gz",
+        "data/ENA_TEST2.EXP1.R2.fastq.gz",
+        "data/ENA_TEST2.EXP2.SE.fastq.gz",
+    ]
+    exact_match_files = metabolights_files + ena_files
 
-    check_map = dict(
-        {
-            "metabolights": [
-                "MARS/test-data/ISA-BH2024-ALL/metpro-analysis.txt",
-                "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--1.mzml",
-                "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--2.mzml",
-                "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--3.mzml",
-                "MARS/test-data/ISA-BH2024-ALL/ms-data-metpro--4.mzml",
-            ],
-            "arrayexpress": [
-                "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-0.fastq",
-                "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-1.fastq",
-                "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-2.fastq",
-                "MARS/test-data/ISA-BH2024-ALL/rna-seq-data-3.fastq",
-            ],
-            "eva": [
-                "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-0.fastq",
-                "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-1.fastq",
-                "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-2.fastq",
-                "MARS/test-data/ISA-BH2024-ALL/cnv-seq-data-3.fastq",
-            ],
-        }
-    )
+    check_map = {
+        TargetRepository.METABOLIGHTS.value: metabolights_files,
+        TargetRepository.ENA.value: ena_files,
+    }
     assert check_map == map_data_files_to_repositories(exact_match_files, investigation)
 
     not_enough_files = exact_match_files[:-1]
 
     with pytest.raises(
         ValueError,
-        match=rf"Assay for repository '{TargetRepository.ARRAYEXPRESS.value}' has encountered",
+        match=rf"Assay for repository '{TargetRepository.ENA.value}' has encountered",
     ):
         map_data_files_to_repositories(not_enough_files, investigation)
 
     too_many_files = exact_match_files.copy()
-    one_too_many = "MARS/test-data/ISA-BH2024-ALL/one-too-many.fastq"
+    one_too_many = "data/one-too-many.fastq"
     too_many_files.append(one_too_many)
 
     result_maps = map_data_files_to_repositories(too_many_files, investigation)

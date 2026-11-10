@@ -378,7 +378,7 @@ python mars_cli.py --credential-service-name biosamples  --username-credentials 
 Work in progress, currently data transfer is not supported yet.
 
 ```bash
-python mars_cli.py --credential-service-name metabolights  --username-credentials <username> --file-transfer ftp --data-files ../data/ISA-BH2024-ALL/metpro-analysis.txt <additional *.mzml data files> --submit-to-biosamples False --submit-to-ena False --output final-isa ../data/metabolights-input-isa.json
+python mars_cli.py --credential-service-name metabolights  --username-credentials <username> --file-transfer ftp --data-files ../data/metpro-analysis.txt <additional *.mzml data files> --submit-to-biosamples False --submit-to-ena False --output final-isa ../data/metabolights-input-isa.json
 ```
 
 ## Deploy repository services
