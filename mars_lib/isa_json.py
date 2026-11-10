@@ -201,15 +201,28 @@ def accession_characteristic_present(
             f"'where' atribute is missing in path {material_type_path.key}."
         )
 
-    accession_characteristics = []
-    for char in material.characteristics:
-        if char.category and char.category.characteristicType:
-            if char.category.characteristicType.annotationValue:
-                if char.category.characteristicType.annotationValue == "accession":
-                    accession_characteristics.append(char)
-            else:
-                if char.category.characteristicType == "accession":
-                    accession_characteristics.append(char)
+    # A characteristic usually references its category by '@id' only, so resolve
+    # it against the node's categories instead of relying on an inline type.
+    accession_category_ids = {
+        char_cat.id
+        for char_cat in node.characteristicCategories
+        if char_cat.id
+        and char_cat.characteristicType
+        and char_cat.characteristicType.annotationValue == "accession"
+    }
+
+    accession_characteristics = [
+        char
+        for char in material.characteristics
+        if char.category
+        and (
+            char.category.id in accession_category_ids
+            or (
+                char.category.characteristicType is not None
+                and char.category.characteristicType.annotationValue == "accession"
+            )
+        )
+    ]
 
     if len(accession_characteristics) > 1:
         raise AttributeError(
@@ -265,19 +278,31 @@ def add_accession_to_material_node(
         ),
         None,
     )
-    updated_material.characteristics.remove(updated_material_accession_characteristic)
 
     if not updated_material_accession_characteristic:
         raise ValueError("Accession characteristic is not present.")
 
-    accession_ontology_annotation = OntologyAnnotation()
-    accession_ontology_annotation.id = (
-        f"#ontology_annotation/accession_{updated_material.id}"
-    )
-    accession_ontology_annotation.annotationValue = accession_number
-    updated_material_accession_characteristic.value = accession_ontology_annotation
+    # Fill in the existing value so its id, termSource, termAccession and
+    # comments survive; only create a new annotation when there is none.
+    accession_value = updated_material_accession_characteristic.value
+    if not isinstance(accession_value, OntologyAnnotation):
+        accession_value = OntologyAnnotation()
+        updated_material_accession_characteristic.value = accession_value
 
-    updated_material.characteristics.append(updated_material_accession_characteristic)
+    accession_value.annotationValue = accession_number
+    if not accession_value.id:
+        accession_value.id = accession_annotation_id(updated_material.id)
+
+
+def accession_annotation_id(material_id: Optional[str]) -> str:
+    """
+    Builds the '@id' for a material's accession annotation.
+
+    Material ids already start with '#' (e.g. '#source/330'), so the material id
+    is flattened ('source_330') to keep a single '#' in the resulting id.
+    """
+    suffix = (material_id or str(uuid.uuid4())).lstrip("#").replace("/", "_")
+    return f"#ontology_annotation/accession_{suffix}"
 
 
 def add_accession_to_data_file_node(node: DataFile, accession_number: str) -> None:

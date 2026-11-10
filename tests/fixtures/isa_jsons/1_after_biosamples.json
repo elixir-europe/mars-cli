@@ -738,7 +738,7 @@
                 },
                 "value": {
                   "comments": [],
-                  "@id": "#ontology_annotation/accession_#source/330",
+                  "@id": "#ontology_annotation/accession_source_330",
                   "annotationValue": "SAMEA131504583"
                 }
               }
@@ -766,7 +766,7 @@
                 },
                 "value": {
                   "comments": [],
-                  "@id": "#ontology_annotation/accession_#sample/331",
+                  "@id": "#ontology_annotation/accession_sample_331",
                   "annotationValue": "SAMEA131504584"
                 }
               },
