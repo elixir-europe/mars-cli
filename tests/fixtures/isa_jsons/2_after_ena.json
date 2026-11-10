@@ -170,7 +170,7 @@
                     },
                     "value": {
                       "comments": [],
-                      "@id": "#ontology_annotation/accession_#other_material/332",
+                      "@id": "#ontology_annotation/accession_other_material_332",
                       "annotationValue": "ERX13506397"
                     }
                   }
@@ -197,7 +197,7 @@
                     },
                     "value": {
                       "comments": [],
-                      "@id": "#ontology_annotation/accession_#other_material/333",
+                      "@id": "#ontology_annotation/accession_other_material_333",
                       "annotationValue": "ERX13506398"
                     }
                   }
@@ -783,7 +783,7 @@
                 },
                 "value": {
                   "comments": [],
-                  "@id": "#ontology_annotation/accession_#source/330",
+                  "@id": "#ontology_annotation/accession_source_330",
                   "annotationValue": "SAMEA131504583"
                 }
               }
@@ -811,7 +811,7 @@
                 },
                 "value": {
                   "comments": [],
-                  "@id": "#ontology_annotation/accession_#sample/331",
+                  "@id": "#ontology_annotation/accession_sample_331",
                   "annotationValue": "SAMEA131504584"
                 }
               },
