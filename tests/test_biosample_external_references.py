@@ -26,13 +26,25 @@ from mars_lib.submit import (
 )
 from mars_lib.target_repo import TargetRepository
 
+GET = "mars_lib.biosamples_external_references.requests.get"
+PUT = "mars_lib.biosamples_external_references.requests.put"
+TOKEN_POST = "mars_lib.authentication.requests.post"
+
 BS_FIXTURE = "./tests/fixtures/SAMEA112654119.json"
 EXT_REFS_INPUT = "./tests/test_input.json"
+DEV_ENDPOINT = biosamples_endpoints["dev"]
 DEV_URLS = TargetRepository.get_repository_urls_from_config(ConfigParser())["DEV"]
 ENA_STUDY_PAGE = "https://wwwdev.ebi.ac.uk/ena/browser/view/"
 MTBLS_STUDY_PAGE = "https://www-test.ebi.ac.uk/metabolights/"
 # Sample 'leaf 1', the one used in the ENA assay of the fixture below
 LEAF_ACCESSION = "SAMEA131504584"
+
+
+def _response(status_code=200, payload=None, text=""):
+    response = mock.Mock(status_code=status_code, text=text)
+    response.json.return_value = payload
+    response.content = text.encode()
+    return response
 
 
 def _investigation_after_ena_and_metabolights():
@@ -52,13 +64,9 @@ def _investigation_after_ena_and_metabolights():
     return investigation
 
 
-def _response(status_code=200, payload=None, text=""):
-    response = mock.Mock(status_code=status_code, text=text)
-    response.json.return_value = payload
-    response.content = text.encode()
-    return response
-
-
+# -- #
+# Input: JSON files and the external references schema
+# -- #
 def test_load_json_file():
 
     with pytest.raises(
@@ -98,16 +106,6 @@ def test_handle_input_dict():
         handle_input_dict(not_a_json)
 
 
-def test_get_header():
-    token = "jkdcbjkbkjsdbjkvb8347yrfiegh3ru3y29yf2g8i39u"
-    header = {
-        "Content-Type": "application/json;charset=UTF-8",
-        "Accept": "application/hal+json",
-        "Authorization": "Bearer jkdcbjkbkjsdbjkvb8347yrfiegh3ru3y29yf2g8i39u",
-    }
-    assert get_header(token) == header
-
-
 def test_validate_bs_accession():
     invalid_accession = "SAREA112654119"
 
@@ -124,7 +122,7 @@ def test_validate_bs_accession():
 def test_validate_json_against_schema(tmp_path, monkeypatch):
     ext_refs = load_json_file(EXT_REFS_INPUT)
 
-    # The schema ships with the package, so it is found from any working directory
+    # The schema ships with the package and is found from any working directory
     monkeypatch.chdir(tmp_path)
     assert validate_json_against_schema(ext_refs, input_json_schema_filepath)
 
@@ -133,16 +131,17 @@ def test_validate_json_against_schema(tmp_path, monkeypatch):
         validate_json_against_schema(ext_refs, input_json_schema_filepath)
 
 
-def test_fetch_bs_json():
-    bs_record = BiosamplesRecord("SAMEA112654119")
-
-    # Bad end-point
-    with pytest.raises(RuntimeError):
-        bs_record.fetch_bs_json("https://wwwdev.ebi.ac.uk/biosamples/sample/")
-
-    # Correct end-point
-    response = bs_record.fetch_bs_json("https://wwwdev.ebi.ac.uk/biosamples/samples/")
-    assert response["accession"] == "SAMEA112654119"
+# -- #
+# A single BioSamples record
+# -- #
+def test_get_header():
+    token = "jkdcbjkbkjsdbjkvb8347yrfiegh3ru3y29yf2g8i39u"
+    header = {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Accept": "application/hal+json",
+        "Authorization": "Bearer jkdcbjkbkjsdbjkvb8347yrfiegh3ru3y29yf2g8i39u",
+    }
+    assert get_header(token) == header
 
 
 def test_load_bs_json():
@@ -170,66 +169,42 @@ def test_load_bs_json():
         bs_record_from_bad_dict.load_bs_json("This is not even a dict!")
 
 
-def test_extend_externalReferences():
+def test_fetch_bs_json():
     bs_record = BiosamplesRecord("SAMEA112654119")
-    bs_record.load_bs_json("./tests/fixtures/SAMEA112654119.json")
+    header = get_header("token")
+    record = load_json_file(BS_FIXTURE)
 
-    new_ext_refs_list = []
-    bs_record.extend_externalReferences(new_ext_refs_list)
+    with mock.patch(GET, return_value=_response(payload=record)) as get:
+        assert bs_record.fetch_bs_json(DEV_ENDPOINT, header=header) == record
 
-    existing_refs = [
-        {"url": "https://ega-archive.org/datasets/EGAD00010002458", "duo": []},
-        {
-            "url": "https://ega-archive.org/metadata/v2/samples/EGAN00004248937",
-            "duo": [],
-        },
-        {"url": "https://www.ebi.ac.uk/ena/browser/view/SAMEA112654119", "duo": []},
-    ]
+    assert get.call_args.args[0] == f"{DEV_ENDPOINT}SAMEA112654119.json"
+    # The submitter's token gives access to private records too
+    assert get.call_args.kwargs["headers"] == header
 
-    new_refs = [
-        {"url": "https://ega-archive.org/datasets/1", "duo": []},
-        {
-            "url": "https://ega-archive.org/metadata/v2/samples/2",
-            "duo": [],
-        },
-        {"url": "https://www.ebi.ac.uk/ena/browser/view/3", "duo": []},
-    ]
-
-    assert len(existing_refs) == len(bs_record.bs_json["externalReferences"])
-
-    # Order of the external links is different in the BiosamplesRecord from a json,
-    # downloaded from https://wwwdev.ebi.ac.uk/biosamples/samples/
-    for ext_link in existing_refs:
-        assert ext_link in bs_record.bs_json["externalReferences"]
-
-    for ext_link in new_refs:
-        assert ext_link not in bs_record.bs_json["externalReferences"]
-
-    bs_record.extend_externalReferences(new_refs)
-
-    for ext_link in existing_refs + new_refs:
-        assert ext_link in bs_record.bs_json["externalReferences"]
+    with mock.patch(GET, return_value=_response(status_code=404, text="Not found")):
+        with pytest.raises(RuntimeError, match="received 404"):
+            bs_record.fetch_bs_json(DEV_ENDPOINT)
 
 
-def test_extend_externalReferences_skips_refs_already_on_record():
+def test_extend_externalReferences():
     bs_record = BiosamplesRecord("SAMEA112654119")
     bs_record.load_bs_json(BS_FIXTURE)
     existing_refs = copy.deepcopy(bs_record.bs_json["externalReferences"])
+    new_ref = {"url": "https://example.org/new", "duo": ["DUO:0000007", "DUO:0000005"]}
 
     bs_record.extend_externalReferences(
         [
-            # BioSamples returns `"duo": []`, the input schema allows leaving it out
-            {"url": "https://ega-archive.org/datasets/EGAD00010002458"},
-            {"url": "https://example.org/new", "duo": ["DUO:0000007", "DUO:0000005"]},
-            # Same as the previous one, DUO codes in another order
-            {"url": "https://example.org/new", "duo": ["DUO:0000005", "DUO:0000007"]},
+            new_ref,
+            # Already on the record: BioSamples treats a missing "duo" as an empty one
+            {"url": existing_refs[0]["url"]},
+            # Same as new_ref: the order of the DUO codes does not matter
+            {"url": new_ref["url"], "duo": ["DUO:0000005", "DUO:0000007"]},
         ]
     )
 
-    # Existing references keep their order, the new one is appended once
-    assert bs_record.bs_json["externalReferences"] == existing_refs + [
-        {"url": "https://example.org/new", "duo": ["DUO:0000007", "DUO:0000005"]},
-    ]
+    # Existing references keep their order, new ones are added once, after them
+    assert bs_record.bs_json["externalReferences"] == existing_refs + [new_ref]
+    # BioSamples adds "_links" to the records it returns, they are not sent back
     assert "_links" not in bs_record.bs_json
 
 
@@ -237,35 +212,37 @@ def test_extend_externalReferences_fetches_record_when_not_loaded():
     bs_record = BiosamplesRecord("SAMEA112654119")
 
     with mock.patch(
-        "mars_lib.biosamples_external_references.requests.get",
-        return_value=_response(payload=load_json_file(BS_FIXTURE)),
+        GET, return_value=_response(payload=load_json_file(BS_FIXTURE))
     ) as get:
         bs_record.extend_externalReferences([{"url": "https://example.org/1"}])
 
-    assert get.call_args.args[0] == f"{biosamples_endpoints['dev']}SAMEA112654119.json"
+    assert get.call_args.args[0] == f"{DEV_ENDPOINT}SAMEA112654119.json"
     assert {"url": "https://example.org/1"} in bs_record.bs_json["externalReferences"]
 
 
-def test_update_remote_record_after_load_bs_json():
+def test_update_remote_record():
     bs_record = BiosamplesRecord("SAMEA112654119")
     bs_record.load_bs_json(BS_FIXTURE)
     bs_record.extend_externalReferences([{"url": "https://example.org/1"}])
+    header = get_header("token")
 
-    with mock.patch(
-        "mars_lib.biosamples_external_references.requests.put",
-        return_value=_response(text="{}"),
-    ) as put:
-        bs_record.update_remote_record(get_header("token"))
+    with mock.patch(PUT, return_value=_response(text="{}")) as put:
+        bs_record.update_remote_record(header)
 
-    assert (
-        put.call_args.args[0]
-        == f"{biosamples_endpoints['dev']}SAMEA112654119?authProvider=WEBIN"
-    )
+    assert put.call_args.args[0] == f"{DEV_ENDPOINT}SAMEA112654119?authProvider=WEBIN"
+    assert put.call_args.kwargs["headers"] == header
     assert json.loads(put.call_args.kwargs["data"]) == bs_record.bs_json
 
+    # Only the original submitter may update a record
+    with mock.patch(PUT, return_value=_response(status_code=403, text="Forbidden")):
+        with pytest.raises(RuntimeError, match="received 403"):
+            bs_record.update_remote_record(header)
 
+
+# -- #
+# Registering external references for a list of BioSamples records
+# -- #
 def test_create_external_references():
-    endpoint = "https://wwwdev.ebi.ac.uk/biosamples/samples/"
     token_url = "https://wwwdev.ebi.ac.uk/ena/dev/submit/webin/auth/token"
 
     def fake_get(url, headers=None):
@@ -274,41 +251,34 @@ def test_create_external_references():
         return _response(payload={"accession": "SAMEA419425", "name": "no refs yet"})
 
     with (
-        mock.patch(
-            "mars_lib.authentication.requests.post",
-            return_value=_response(text="the-token"),
-        ) as post,
-        mock.patch(
-            "mars_lib.biosamples_external_references.requests.get",
-            side_effect=fake_get,
-        ) as get,
-        mock.patch(
-            "mars_lib.biosamples_external_references.requests.put",
-            return_value=_response(text="{}"),
-        ) as put,
+        mock.patch(TOKEN_POST, return_value=_response(text="the-token")) as post,
+        mock.patch(GET, side_effect=fake_get) as get,
+        mock.patch(PUT, return_value=_response(text="{}")) as put,
     ):
         with pytest.raises(RuntimeError, match="SAMEA112654119") as error:
             create_external_references(
                 {"username": "Webin-00000", "password": "secret"},
                 load_json_file(EXT_REFS_INPUT),
-                biosamples_url=endpoint.rstrip("/"),
+                biosamples_url=DEV_ENDPOINT.rstrip("/"),
                 webin_token_url=token_url,
             )
 
-    assert "SAMEA419425" not in str(error.value)
     assert post.call_args.args[0].startswith(token_url)
-    # Records are fetched with the token, so private samples can be updated too
     assert all(
         c.kwargs["headers"] == get_header("the-token") for c in get.call_args_list
     )
-    # The record that could not be fetched does not stop the next one
+    # A record that cannot be updated does not stop the others, and is reported
+    assert "SAMEA419425" not in str(error.value)
     put.assert_called_once()
-    assert put.call_args.args[0] == f"{endpoint}SAMEA419425?authProvider=WEBIN"
+    assert put.call_args.args[0] == f"{DEV_ENDPOINT}SAMEA419425?authProvider=WEBIN"
     assert json.loads(put.call_args.kwargs["data"])["externalReferences"] == [
         {"url": "https://ega-archive.org/datasets/EGAD00010002458"}
     ]
 
 
+# -- #
+# Linking a submission to the BioSamples records of its samples
+# -- #
 def test_build_external_references():
     investigation = _investigation_after_ena_and_metabolights()
 
@@ -340,17 +310,10 @@ def test_build_external_references():
 @pytest.mark.parametrize("put_status, log_level", [(200, "info"), (403, "warning")])
 def test_register_external_references_in_biosamples(put_status, log_level):
     with (
+        mock.patch(TOKEN_POST, return_value=_response(text="the-token")) as post,
+        mock.patch(GET, return_value=_response(payload={"accession": LEAF_ACCESSION})),
         mock.patch(
-            "mars_lib.authentication.requests.post",
-            return_value=_response(text="the-token"),
-        ) as post,
-        mock.patch(
-            "mars_lib.biosamples_external_references.requests.get",
-            return_value=_response(payload={"accession": LEAF_ACCESSION}),
-        ),
-        mock.patch(
-            "mars_lib.biosamples_external_references.requests.put",
-            return_value=_response(status_code=put_status, text="{}"),
+            PUT, return_value=_response(status_code=put_status, text="{}")
         ) as put,
         mock.patch("mars_lib.submit.print_and_log") as log,
     ):
@@ -370,11 +333,3 @@ def test_register_external_references_in_biosamples(put_status, log_level):
         {"url": f"{ENA_STUDY_PAGE}ERP208805"}
     ]
     assert log.call_args.kwargs["level"] == log_level
-
-
-def test_update_remote_record():
-    bs_record = BiosamplesRecord("SAMEA112654119")
-    bs_record.fetch_bs_json("https://wwwdev.ebi.ac.uk/biosamples/samples/")
-
-    with pytest.raises(RuntimeError):
-        bs_record.update_remote_record(get_header("thisIsAFakeToken"))
