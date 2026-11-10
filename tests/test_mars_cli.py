@@ -1,4 +1,5 @@
 import importlib
+import logging
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -150,7 +151,12 @@ def _invoke_check(mars_cli, *extra_args):
     )
 
 
-def test_check_data_files_reports_counts(mars_cli, tmp_path):
+def _records(caplog, level: int) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.levelno == level]
+
+
+def test_check_data_files_reports_counts(mars_cli, tmp_path, caplog):
+    caplog.set_level(logging.INFO, logger="MARS-CLI")
     names = _isa_data_file_names()
     data = tmp_path / "data"
     data.mkdir()
@@ -161,15 +167,21 @@ def test_check_data_files_reports_counts(mars_cli, tmp_path):
     result = _invoke_check(mars_cli, "--data-folder", str(data))
 
     assert result.exit_code == 1, result.output
-    assert (
-        f"matched to a data file in the ISA JSON: {len(names) - 1}" in result.output
-    )
-    assert "not referenced in the ISA JSON: 1" in result.output
-    assert "without a matching data file: 1" in result.output
-    assert f"Missing data file: {names[0]}" in result.output
+    report = "\n".join(_records(caplog, logging.INFO))
+    assert f"matched to a data file in the ISA JSON: {len(names) - 1}" in report
+    assert "not referenced in the ISA JSON: 1" in report
+    assert "without a matching data file: 1" in report
+    # Unreferenced files are logged as warnings, missing files as errors
+    assert _records(caplog, logging.WARNING) == [
+        f"Not referenced in the ISA JSON: {data / 'not-in-isa.fastq'}"
+    ]
+    assert _records(caplog, logging.ERROR) == [f"Missing data file: {names[0]}"]
 
 
-def test_check_data_files_succeeds_when_everything_matches(mars_cli, tmp_path):
+def test_check_data_files_succeeds_when_everything_matches(
+    mars_cli, tmp_path, caplog
+):
+    caplog.set_level(logging.INFO, logger="MARS-CLI")
     names = _isa_data_file_names()
     data = tmp_path / "data"
     data.mkdir()
@@ -179,6 +191,36 @@ def test_check_data_files_succeeds_when_everything_matches(mars_cli, tmp_path):
     result = _invoke_check(mars_cli, "--data-folder", str(data))
 
     assert result.exit_code == 0, result.output
-    assert f"matched to a data file in the ISA JSON: {len(names)}" in result.output
-    assert "not referenced in the ISA JSON: 0" in result.output
-    assert "without a matching data file: 0" in result.output
+    report = "\n".join(_records(caplog, logging.INFO))
+    assert f"matched to a data file in the ISA JSON: {len(names)}" in report
+    assert "not referenced in the ISA JSON: 0" in report
+    assert "without a matching data file: 0" in report
+    assert _records(caplog, logging.WARNING) == []
+    assert _records(caplog, logging.ERROR) == []
+
+
+def test_submission_fails_before_submitting_when_data_files_are_missing(
+    mars_cli, tmp_path, monkeypatch
+):
+    from mars_lib import submit as submit_module
+
+    # Must never reach a target repository
+    monkeypatch.setattr(
+        submit_module,
+        "submit_to_biosamples",
+        MagicMock(side_effect=AssertionError("should not be called")),
+    )
+    with open("tests/test_credentials_example.json") as credentials_file:
+        with pytest.raises(ValueError, match="missing from the data files"):
+            submit_module.submission(
+                webin_username="",
+                metabolights_username="",
+                metabolights_ftp_username="",
+                credentials_file=credentials_file,
+                isa_json_file=str(BH2024_ISA_JSON),
+                target_repositories=["biosamples"],
+                urls={},
+                file_transfer="ftp",
+                output=str(tmp_path / "out"),
+                data_file_paths=[],
+            )
