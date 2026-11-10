@@ -44,7 +44,7 @@ class TargetRepository(str, Enum):
                     "STUDY-PAGE": config.get(
                         "ena",
                         "development-study-page-url",
-                        fallback="https://wwwdev.ebi.ac.uk/ena/browser/view/",
+                        fallback="https://www.ebi.ac.uk/ena/browser/view/",
                     ),
                 },
                 "WEBIN": {
