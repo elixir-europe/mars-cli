@@ -182,6 +182,7 @@ Options:
   --help             Show this message and exit.
 
 Commands:
+  check-data-files   Check that the data files in the ISA JSON match the files...
   health-check       Check the health of the target repositories.
   set-password       Store a password in the keyring.
   submit             Start a submission to the target repositories.
@@ -336,6 +337,35 @@ mars-cli validate-isa-json ../test-data/biosamples-input-isa.json
 
 __Note:__ The root level of the ISA-JSON __IS__ the investigation. ISA-JSON files that wrap the investigation in an
 `investigation` key are not supported.
+
+## Feature: Check data files against the ISA JSON
+
+Before submitting, you can check whether every data file referenced in the ISA-JSON is present in the folder(s) you
+pass to the CLI. Files are matched on their file name, the same way `submit` does it.
+
+```sh
+mars-cli check-data-files --data-folder ../data my-isa-json.json
+```
+
+Use `--data-folder` multiple times to pass more than one folder. Each folder is searched recursively.
+
+The command reports:
+
+- how many data files could be matched to a data file in the ISA-JSON,
+- how many data files are not referenced in the ISA-JSON (these are skipped during submission),
+- how many data files in the ISA-JSON could not be matched to a data file passed through the CLI.
+
+```
+Data file check for ISA JSON with investigation 'My investigation':
+- Data files matched to a data file in the ISA JSON: 12
+- Data files not referenced in the ISA JSON: 1
+- ISA JSON data files without a matching data file: 1
+Not referenced in the ISA JSON: ../data/not-in-isa.fastq
+Missing data file: rna-seq-data-3.fastq
+```
+
+The command exits with a non-zero status when any data file in the ISA-JSON has no match, so it can be used as a gate
+in scripts and CI.
 
 ## Feature:  Extending BioSamples' records
 
