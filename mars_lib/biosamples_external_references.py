@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError, SchemaError
-from typing import Union, Any, Optional, List
+from typing import Any
 
 from mars_lib.isa_json import detect_target_repo_comment
 from mars_lib.models.isa_json import (
@@ -64,7 +64,7 @@ def load_json_file(file: str) -> Any:
         )
 
 
-def handle_input_dict(input: Union[dict[str, Any], str]) -> dict[str, Any]:
+def handle_input_dict(input: dict[str, Any] | str) -> dict[str, Any]:
     """
     Function to handle the input: assert that it's either a dictionary or
         the filepath to an existing file containing the dictionary
@@ -126,8 +126,8 @@ def validate_bs_accession(accession_str: str) -> None:
 
 
 def validate_json_against_schema(
-    json_doc: Union[dict[str, List[str]], str], json_schema: Union[dict[str, str], str]
-) -> Optional[bool]:
+    json_doc: dict[str, list[str]] | str, json_schema: dict[str, str] | str
+) -> bool | None:
     """
     Validates a JSON document against a given JSON Schema.
 
@@ -185,11 +185,11 @@ class BiosamplesRecord:
         """
         validate_bs_accession(bs_accession)
         self.bs_accession = bs_accession
-        self.biosamples_credentials: Optional[dict[str, str]] = None
-        self.biosamples_externalReferences: List[str] = []
+        self.biosamples_credentials: dict[str, str] | None = None
+        self.biosamples_externalReferences: list[str] = []
         self.production: bool = False
         self.bs_json: dict[str, Any] = {}
-        self.biosamples_endpoint: Optional[str] = None
+        self.biosamples_endpoint: str | None = None
 
     def _get_endpoint(self) -> str:
         """
@@ -208,8 +208,8 @@ class BiosamplesRecord:
         print("Production Mode:", self.production)
 
     def fetch_bs_json(
-        self, biosamples_endpoint: str, header: Optional[dict[str, str]] = None
-    ) -> Optional[dict[str, Any]]:
+        self, biosamples_endpoint: str, header: dict[str, str] | None = None
+    ) -> dict[str, Any] | None:
         """
         Fetches the BioSample's record (JSON) of the accession.
 
@@ -248,15 +248,13 @@ class BiosamplesRecord:
         self.bs_json = response_json
         return self.bs_json
 
-    def load_bs_json(
-        self, bs_json: Union[str, dict[str, Any]]
-    ) -> Optional[dict[str, Any]]:
+    def load_bs_json(self, bs_json: str | dict[str, Any]) -> dict[str, Any] | None:
         """
         Loads a given JSON, or the file containing it, as the BioSample's record (JSON) for this instance.
             It is an alternative to fetching it directly from BioSample.
 
         Args:
-            bs_json Union[str, dict]: The already Biosamples JSON metadata of the accession either path to file or dictionary.
+            bs_json (str | dict): The already Biosamples JSON metadata of the accession either path to file or dictionary.
         """
         if isinstance(bs_json, dict):
             self.bs_json = bs_json
@@ -281,7 +279,7 @@ class BiosamplesRecord:
         return self.bs_json
 
     def extend_externalReferences(
-        self, new_ext_refs_list: List[dict[str, str]]
+        self, new_ext_refs_list: list[dict[str, str]]
     ) -> dict[str, Any]:
         """
         Extends the JSON of the BioSample's record with new externalReferences.
@@ -292,7 +290,7 @@ class BiosamplesRecord:
             self.fetch_bs_json(self._get_endpoint())
         self.pop_links()
 
-        ext_refs_list: List[dict[str, Any]] = []
+        ext_refs_list: list[dict[str, Any]] = []
         seen_refs: set[tuple[str, tuple[str, ...]]] = set()
         for ext_ref in self.bs_json.get("externalReferences", []) + new_ext_refs_list:
             key = _ext_ref_key(ext_ref)
@@ -305,7 +303,7 @@ class BiosamplesRecord:
 
     def update_remote_record(
         self, header: dict[str, str], webin_auth: str = "?authProvider=WEBIN"
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Updates the remote record of the BioSample's accession with the current sample JSON.
 
@@ -334,11 +332,11 @@ class BiosamplesRecord:
 # -- #
 # Extraction of BioSamples external references from an ISA-JSON
 # -- #
-def _get_comment_value(comments: list[Comment], name: str) -> Optional[str]:
+def _get_comment_value(comments: list[Comment], name: str) -> str | None:
     return next((c.value for c in comments if c.name == name and c.value), None)
 
 
-def _get_biosamples_accession(sample: Sample, study: Study) -> Optional[str]:
+def _get_biosamples_accession(sample: Sample, study: Study) -> str | None:
     """Returns the value of the sample's 'accession' characteristic, set after the BioSamples submission."""
     accession_category_ids = {
         category.id
