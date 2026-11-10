@@ -315,31 +315,6 @@ mars-cli submit --submit-to-metabolights False my-credentials my-isa-json.json
 mars-cli submit --output final_isa my-credentials my-isa-json.json
 ```
 
-## Feature: Validation of the ISA JSON
-> **Status**: 🚧 To Be Developed
-
-This feature is planned but not yet implemented. Further details will be provided as development progresses.
-
-You can perform a syntactic validation of the ISA-JSON, without submitting to the target repositories.
-
-__Note:__ This does not take repository-side validation into account, nor guarantees successful submission.
-
-### JSONata validation
-
-[JSONata](https://jsonata.org/) is a JSON query and transformation tool that will be used it this project to perform
-additional validation
-of the ISA-JSON and, in some cases, automatically patch inconsistencies.
-
-This feature is implemented as a set of additional validation rules a user can customize according to the submission
-needs.
-
-```sh
-mars-cli validate-isa-json ../test-data/biosamples-input-isa.json
-```
-
-__Note:__ The root level of the ISA-JSON __IS__ the investigation. ISA-JSON files that wrap the investigation in an
-`investigation` key are not supported.
-
 ## Feature: Check data files against the ISA JSON
 
 Before submitting, you can check whether every data file referenced in the ISA-JSON is present in the folder(s) you
