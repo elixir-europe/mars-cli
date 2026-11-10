@@ -74,38 +74,26 @@ def test_reduce_investigation_for_biosamples():
     assert len(filtered_investigation.studies[0].assays) == 0
 
 
-def test_data_type_validator():
-    valid_data_json = {"@id": "data_001", "name": "data 1", "type": "Image File"}
-
-    invalid_data_json = {
-        "@id": "data_001",
-        "name": "data 1",
-        "type": "Custom File",  # This is not a valid data type
-    }
-
-    assert Data.model_validate(valid_data_json)
-
-    with pytest.raises(ValidationError):
-        Data.model_validate(invalid_data_json)
+def test_data_type_is_free_text():
+    # The type is not restricted to a fixed list of values
+    assert Data.model_validate(
+        {"@id": "data_001", "name": "data 1", "type": "Image File"}
+    )
+    custom = Data.model_validate(
+        {"@id": "data_002", "name": "data 2", "type": "Custom File"}
+    )
+    assert custom.type == "Custom File"
 
 
-def test_material_type_validator():
-    valid_material_json = {
-        "@id": "material_001",
-        "name": "material 1",
-        "type": "Extract Name",
-    }
-
-    invalid_material_json = {
-        "@id": "material_002",
-        "name": "material 2",
-        "type": "Custom Material",  # This is not a valid material type
-    }
-
-    assert Material.model_validate(valid_material_json)
-
-    with pytest.raises(ValidationError):
-        Material.model_validate(invalid_material_json)
+def test_material_type_is_free_text():
+    # The type is not restricted to a fixed list of values
+    assert Material.model_validate(
+        {"@id": "material_001", "name": "material 1", "type": "Extract Name"}
+    )
+    custom = Material.model_validate(
+        {"@id": "material_002", "name": "material 2", "type": "Custom Material"}
+    )
+    assert custom.type == "Custom Material"
 
 
 def test_target_repo_comment_validator():
@@ -345,32 +333,133 @@ def test_update_study_materials_multiple_samples_from_one_source():
     )
 
 
-def test_update_study_only_with_ena_study_accession_comment():
-    json_path = "tests/fixtures/isa_jsons/1_after_biosamples.json"
-    investigation = load_investigation(json_path)
-    response_file_path = "tests/fixtures/mars_receipts/ena_success_response.json"
-    ena_response = RepositoryResponse.from_json_file(response_file_path)
-    ena_study_accession_number = "ERP167466"
+ENA_STUDY_TITLE = "Arabidopsis thaliana"
+ENA_ASSAY_ID = "#assay/18_20_21"
+
+
+def _comment_values(comments, name):
+    return [comment.value for comment in comments if comment.name == name]
+
+
+def _ena_study_receipt(*accession_paths):
+    """Builds an ENA MARS receipt with one study accession per (value, path) pair."""
+    return RepositoryResponse.model_validate(
+        {
+            "targetRepository": "ena",
+            "errors": [],
+            "info": [],
+            "accessions": [
+                {"value": value, "path": path} for value, path in accession_paths
+            ],
+        }
+    )
+
+
+def _study_path(title=ENA_STUDY_TITLE):
+    return [{"key": "studies", "where": {"key": "title", "value": title}}]
+
+
+def _assay_path(assay_id, title=ENA_STUDY_TITLE):
+    return _study_path(title) + [
+        {"key": "assays", "where": {"key": "@id", "value": assay_id}}
+    ]
+
+
+def test_update_ena_study_accession_on_assay():
+    # The ENA service creates one ENA study per assay, so the receipt points the
+    # study accession at the assay.
+    investigation = load_investigation(
+        "tests/fixtures/isa_jsons/1_after_biosamples.json"
+    )
+    ena_response = RepositoryResponse.from_json_file(
+        "tests/fixtures/mars_receipts/ena_success_response.json"
+    )
 
     updated_investigation = update_investigation(investigation, ena_response)
-    study_comments = updated_investigation.studies[0].comments
-    accession_comment = filter(
-        lambda x: x.name == "ena_study_accession", study_comments
-    )
-    assert next(accession_comment).value == ena_study_accession_number
-
+    study = updated_investigation.studies[0]
     ena_assay = next(
-        filter(
-            lambda assay: is_assay_for_target_repo(assay, "ena"),
-            updated_investigation.studies[0].assays,
-        ),
-        None,
+        assay for assay in study.assays if is_assay_for_target_repo(assay, "ena")
     )
-    assay_comments = ena_assay.comments
-    accession_comments = [
-        comment for comment in assay_comments if comment.name == "ena_study_accession"
+
+    assert _comment_values(ena_assay.comments, "ena_study_accession") == ["ERP208805"]
+    assert _comment_values(ena_assay.comments, "ena_assay_accession") == []
+    assert _comment_values(study.comments, "ena_study_accession") == []
+
+
+def test_update_ena_study_accession_on_study():
+    # A receipt pointing at the study itself still annotates the study.
+    investigation = load_investigation(
+        "tests/fixtures/isa_jsons/1_after_biosamples.json"
+    )
+    ena_response = _ena_study_receipt(("ERP000001", _study_path()))
+
+    updated_investigation = update_investigation(investigation, ena_response)
+    study = updated_investigation.studies[0]
+
+    assert _comment_values(study.comments, "ena_study_accession") == ["ERP000001"]
+    for assay in study.assays:
+        assert _comment_values(assay.comments, "ena_study_accession") == []
+
+
+def test_update_ena_study_accessions_for_multiple_assays():
+    # Each ENA assay becomes its own ENA study; every accession must land on
+    # the assay the receipt points to, not on the first ENA assay of the study.
+    investigation = load_investigation(
+        "tests/fixtures/isa_jsons/1_after_biosamples.json"
+    )
+    study = investigation.studies[0]
+    second_assay = study.assays[0].model_copy(deep=True)
+    second_assay.id = "#assay/second_ena_assay"
+    study.assays.append(second_assay)
+
+    ena_response = _ena_study_receipt(
+        ("ERP000001", _assay_path(ENA_ASSAY_ID)),
+        ("ERP000002", _assay_path("#assay/second_ena_assay")),
+    )
+
+    updated_investigation = update_investigation(investigation, ena_response)
+    first, second = updated_investigation.studies[0].assays
+
+    assert _comment_values(first.comments, "ena_study_accession") == ["ERP000001"]
+    assert _comment_values(second.comments, "ena_study_accession") == ["ERP000002"]
+
+
+def test_update_ena_study_accession_unknown_assay():
+    investigation = load_investigation(
+        "tests/fixtures/isa_jsons/1_after_biosamples.json"
+    )
+    ena_response = _ena_study_receipt(
+        ("ERP000001", _assay_path("#assay/does_not_exist"))
+    )
+
+    with pytest.raises(ValueError, match="Node not found for ERP000001"):
+        update_investigation(investigation, ena_response)
+
+
+def test_update_experiment_accession_on_library():
+    investigation = load_investigation(
+        "tests/fixtures/isa_jsons/1_after_biosamples.json"
+    )
+    ena_response = RepositoryResponse.from_json_file(
+        "tests/fixtures/mars_receipts/ena_success_response.json"
+    )
+
+    updated_investigation = update_investigation(investigation, ena_response)
+    other_materials = {
+        material.id: material
+        for material in updated_investigation.studies[0]
+        .assays[0]
+        .materials.otherMaterials
+    }
+
+    library_accessions = [
+        char.value.annotationValue
+        for char in other_materials["#other_material/333"].characteristics
+        if char.category
+        and char.category.characteristicType
+        and char.category.characteristicType.annotationValue == "accession"
     ]
-    assert accession_comments == []
+    assert library_accessions == ["ERX17495163"]
 
 
 def test_update_datafile_comment_with_accession_comment_present():
@@ -378,7 +467,7 @@ def test_update_datafile_comment_with_accession_comment_present():
     investigation = load_investigation(json_path)
     response_file_path = "tests/fixtures/mars_receipts/ena_success_response.json"
     ena_response = RepositoryResponse.from_json_file(response_file_path)
-    data_file_accession_number = "ERR00000001"
+    data_file_accession_number = "ERR18102735"
 
     updated_investigation = update_investigation(investigation, ena_response)
     data_file_comments = (

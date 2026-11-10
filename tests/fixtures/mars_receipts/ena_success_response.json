@@ -8,19 +8,7 @@
   ],
   "accessions": [
     {
-      "value": "ERP167466",
-      "path": [
-        {
-          "key": "studies",
-          "where": {
-            "key": "title",
-            "value": "Arabidopsis thaliana"
-          }
-        }
-      ]
-    },
-    {
-      "value": "ERX13506397",
+      "value": "ERP208805",
       "path": [
         {
           "key": "studies",
@@ -35,21 +23,11 @@
             "key": "@id",
             "value": "#assay/18_20_21"
           }
-        },
-        {
-          "key": "materials"
-        },
-        {
-          "key": "otherMaterials",
-          "where": {
-            "key": "@id",
-            "value": "#other_material/332"
-          }
         }
       ]
     },
     {
-      "value": "ERX13506398",
+      "value": "ERX17495163",
       "path": [
         {
           "key": "studies",
@@ -78,7 +56,7 @@
       ]
     },
     {
-      "value": "ERR00000001",
+      "value": "ERR18102735",
       "path": [
         {
           "key": "studies",
