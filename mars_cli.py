@@ -9,7 +9,7 @@ from pydantic_core import ValidationError
 import requests
 
 from mars_lib.credential import CredentialManager
-from mars_lib.isa_json import load_investigation
+from mars_lib.isa_json import check_data_files, load_investigation
 from mars_lib.logging import init_logging, print_and_log
 from mars_lib.settings import generate_config
 from mars_lib.submit import submission
@@ -36,6 +36,16 @@ init_logging(config, fallback_log_file)
 
 # Read in all the URLs from the config file
 urls = TargetRepository.get_repository_urls_from_config(config)
+
+
+def list_files_in_folders(folders) -> list[str]:
+    """Recursively list every file in the provided folders."""
+    return [
+        os.path.join(root, file_name)
+        for folder in folders
+        for root, _dirs, file_names in os.walk(folder)
+        for file_name in sorted(file_names)
+    ]
 
 
 @click.group()
@@ -154,13 +164,7 @@ def submit(
 
     urls_dict = ctx.obj["FILTERED_URLS"]
 
-    # Recursively list every file in the provided folders
-    data_file_paths: list[str] = [
-        os.path.join(root, file_name)
-        for folder in data_folder
-        for root, _dirs, file_names in os.walk(folder)
-        for file_name in sorted(file_names)
-    ]
+    data_file_paths = list_files_in_folders(data_folder)
 
     submission(
         webin_username,
@@ -227,6 +231,43 @@ def validate_investigation(isa_json_file):
         print_and_log(f"ISA JSON with investigation '{investigation.title}' is valid.")
     except ValidationError as err:
         print_and_log(f"Validation errors occurred:\n{err}", level="error")
+
+
+@cli.command("check-data-files")
+@click.argument(
+    "isa_json_file",
+    type=click.File("r"),
+)
+@click.option(
+    "--data-folder",
+    type=click.Path(exists=True, dir_okay=True, readable=True, executable=True),
+    multiple=True,
+    help="Path to a folder holding the data files. All files in the folder (recursively) are included. Can be passed multiple times.",
+)
+def check_data_files_command(isa_json_file, data_folder):
+    """Check that the data files in the ISA JSON match the files in the data folders."""
+    investigation = load_investigation(isa_json_file)
+
+    if isinstance(investigation, ValidationError):
+        raise investigation
+
+    report = check_data_files(list_files_in_folders(data_folder), investigation)
+
+    # The report is the command's output, so it is echoed directly instead of
+    # going through the logger (which hides INFO messages by default).
+    click.echo(
+        f"Data file check for ISA JSON with investigation '{investigation.title}':\n"
+        f"- Data files matched to a data file in the ISA JSON: {len(report.matched)}\n"
+        f"- Data files not referenced in the ISA JSON: {len(report.unreferenced)}\n"
+        f"- ISA JSON data files without a matching data file: {len(report.missing)}"
+    )
+    for file in report.unreferenced:
+        click.echo(f"Not referenced in the ISA JSON: {file}")
+    for name in report.missing:
+        click.echo(f"Missing data file: {name}")
+
+    if report.missing:
+        sys.exit(1)
 
 
 @cli.command()

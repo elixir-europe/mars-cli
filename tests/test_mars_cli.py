@@ -125,3 +125,60 @@ def test_submit_rejects_nonexistent_data_folder(mars_cli, isa_json_file, tmp_pat
 
     assert result.exit_code != 0
     mock_submission.assert_not_called()
+
+
+BH2024_ISA_JSON = Path("MARS/test-data/ISA-BH2024-ALL/isa-bh2024-all.json")
+
+
+def _isa_data_file_names() -> list[str]:
+    from mars_lib.isa_json import load_investigation
+
+    investigation = load_investigation(str(BH2024_ISA_JSON))
+    return sorted(
+        {
+            df.name
+            for study in investigation.studies
+            for assay in study.assays
+            for df in assay.dataFiles
+        }
+    )
+
+
+def _invoke_check(mars_cli, *extra_args):
+    return CliRunner().invoke(
+        mars_cli.cli, ["check-data-files", str(BH2024_ISA_JSON), *extra_args]
+    )
+
+
+def test_check_data_files_reports_counts(mars_cli, tmp_path):
+    names = _isa_data_file_names()
+    data = tmp_path / "data"
+    data.mkdir()
+    for name in names[1:]:
+        (data / name).write_text("")
+    (data / "not-in-isa.fastq").write_text("")
+
+    result = _invoke_check(mars_cli, "--data-folder", str(data))
+
+    assert result.exit_code == 1, result.output
+    assert (
+        f"matched to a data file in the ISA JSON: {len(names) - 1}" in result.output
+    )
+    assert "not referenced in the ISA JSON: 1" in result.output
+    assert "without a matching data file: 1" in result.output
+    assert f"Missing data file: {names[0]}" in result.output
+
+
+def test_check_data_files_succeeds_when_everything_matches(mars_cli, tmp_path):
+    names = _isa_data_file_names()
+    data = tmp_path / "data"
+    data.mkdir()
+    for name in names:
+        (data / name).write_text("")
+
+    result = _invoke_check(mars_cli, "--data-folder", str(data))
+
+    assert result.exit_code == 0, result.output
+    assert f"matched to a data file in the ISA JSON: {len(names)}" in result.output
+    assert "not referenced in the ISA JSON: 0" in result.output
+    assert "without a matching data file: 0" in result.output
