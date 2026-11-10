@@ -6,6 +6,7 @@ from mars_lib.isa_json import (
     load_investigation,
     update_investigation,
     map_data_files_to_repositories,
+    check_data_files,
     is_assay_for_target_repo,
 )
 from mars_lib.target_repo import TargetRepository, TARGET_REPO_KEY
@@ -755,3 +756,50 @@ def test_map_data_files_to_repositories():
     duplicated_files.append(exact_match_files[-1])
 
     map_data_files_to_repositories(duplicated_files, investigation)
+
+
+BH2024_ISA_JSON = "MARS/test-data/ISA-BH2024-ALL/isa-bh2024-all.json"
+
+
+def _isa_data_file_names(investigation) -> set[str]:
+    return {
+        df.name
+        for study in investigation.studies
+        for assay in study.assays
+        for df in assay.dataFiles
+    }
+
+
+def test_check_data_files_all_matched():
+    investigation = load_investigation(BH2024_ISA_JSON)
+    files = [f"data/{name}" for name in sorted(_isa_data_file_names(investigation))]
+
+    report = check_data_files(files, investigation)
+
+    assert report.matched == files
+    assert report.unreferenced == []
+    assert report.missing == []
+
+
+def test_check_data_files_reports_unreferenced_and_missing():
+    investigation = load_investigation(BH2024_ISA_JSON)
+    names = sorted(_isa_data_file_names(investigation))
+    absent = names[0]
+    present = names[1:]
+    files = [f"data/{name}" for name in present] + ["data/not-in-isa.fastq"]
+
+    report = check_data_files(files, investigation)
+
+    assert len(report.matched) == len(present)
+    assert report.unreferenced == ["data/not-in-isa.fastq"]
+    assert report.missing == [absent]
+
+
+def test_check_data_files_without_files_reports_all_missing():
+    investigation = load_investigation(BH2024_ISA_JSON)
+
+    report = check_data_files([], investigation)
+
+    assert report.matched == []
+    assert report.unreferenced == []
+    assert report.missing == sorted(_isa_data_file_names(investigation))

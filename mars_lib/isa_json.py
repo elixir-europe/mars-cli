@@ -1,4 +1,6 @@
 import json
+import os
+from dataclasses import dataclass, field
 from typing import Any
 
 from mars_lib.logging import print_and_log
@@ -577,3 +579,52 @@ def map_data_files_to_repositories(
     ]
 
     return df_map
+
+
+@dataclass
+class DataFileCheckReport:
+    """
+    Result of comparing the data files passed to the CLI with the data files
+    referenced in the ISA-JSON. Files are matched on their file name.
+
+    Attributes:
+        matched: Passed files that match a data file in the ISA-JSON.
+        unreferenced: Passed files that are not referenced in the ISA-JSON.
+        missing: Names of ISA-JSON data files without a matching passed file.
+    """
+
+    matched: list[str] = field(default_factory=list)
+    unreferenced: list[str] = field(default_factory=list)
+    missing: list[str] = field(default_factory=list)
+
+
+def check_data_files(
+    files: list[str], investigation: Investigation
+) -> DataFileCheckReport:
+    """
+    Checks whether the data files in the ISA-JSON are matched by the passed files.
+
+    Args:
+        files (list[str]): Paths of the data files passed through the CLI.
+        investigation (Investigation): The ISA-JSON investigation.
+
+    Returns:
+        DataFileCheckReport: Matched, unreferenced and missing data files.
+    """
+    isa_names = {
+        df.name
+        for study in investigation.studies
+        for assay in study.assays
+        for df in assay.dataFiles
+        if df.name
+    }
+    report = DataFileCheckReport()
+    for file in files:
+        if os.path.basename(file) in isa_names:
+            report.matched.append(file)
+        else:
+            report.unreferenced.append(file)
+
+    passed_names = {os.path.basename(f) for f in files}
+    report.missing = sorted(isa_names - passed_names)
+    return report
