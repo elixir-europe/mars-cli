@@ -105,10 +105,10 @@ def cli(ctx, development):
     help="provide the name of a file transfer solution, like ftp or aspera. The default is ftp.",
 )
 @click.option(
-    "--data-files",
-    type=click.File("r"),
+    "--data-folder",
+    type=click.Path(exists=True, dir_okay=True, readable=True, executable=True),
     multiple=True,
-    help="Path of files to upload",
+    help="Path to a folder holding the files you want to upload. All files in the folder (recursively) are included. Can be passed multiple times.",
 )
 @click.option(
     "--submit-to-metabolights",
@@ -134,7 +134,7 @@ def submit(
     submit_to_metabolights,
     file_transfer,
     output,
-    data_files,
+    data_folder,
 ):
     """Start a submission to the target repositories."""
     target_repositories = []
@@ -154,7 +154,13 @@ def submit(
 
     urls_dict = ctx.obj["FILTERED_URLS"]
 
-    data_file_paths = [f.name for f in data_files] if file_transfer else []
+    # Recursively list every file in the provided folders
+    data_file_paths: list[str] = [
+        os.path.join(root, file_name)
+        for folder in data_folder
+        for root, _dirs, file_names in os.walk(folder)
+        for file_name in sorted(file_names)
+    ]
 
     submission(
         webin_username,
