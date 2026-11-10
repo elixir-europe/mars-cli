@@ -6,7 +6,7 @@ import uuid
 import json
 import gzip
 import hashlib
-from typing import Any
+from typing import Any, List, Tuple
 
 
 def _timestamp_suffix() -> str:
@@ -50,7 +50,7 @@ def _md5_of_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def _get_all_assays(isa_obj: dict[str, Any]) -> list[dict[str, Any]]:
+def _get_all_assays(isa_obj: dict[str, Any]) -> List[dict[str, Any]]:
     """
     Return all assays found under studies[*].assays[*].
     """
@@ -58,7 +58,7 @@ def _get_all_assays(isa_obj: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(studies, list):
         return []
 
-    assays: list[dict[str, Any]] = []
+    assays: List[dict[str, Any]] = []
     for study in studies:
         if not isinstance(study, dict):
             continue
@@ -72,7 +72,7 @@ def _get_all_assays(isa_obj: dict[str, Any]) -> list[dict[str, Any]]:
     return assays
 
 
-def _ensure_comment(comments: list[dict[str, Any]], name: str, value: str) -> None:
+def _ensure_comment(comments: List[dict[str, Any]], name: str, value: str) -> None:
     """
     Ensure there is a comment with the given name, updating it if it exists,
     or appending a new one if not.
@@ -85,10 +85,10 @@ def _ensure_comment(comments: list[dict[str, Any]], name: str, value: str) -> No
 
 
 def _update_datafiles_with_generated_files(
-    assays: list[dict[str, Any]],
+    assays: List[dict[str, Any]],
     data_dir: Path,
     n_files: int | None,
-) -> list[Path]:
+) -> List[Path]:
     """
     Update assay dataFiles entries with newly generated files.
 
@@ -110,7 +110,7 @@ def _update_datafiles_with_generated_files(
               - "checksum_method" -> "MD5"
             (existing "accession", "submission date", etc. are kept as-is)
     """
-    generated_paths: list[Path] = []
+    generated_paths: List[Path] = []
     suffix = _timestamp_suffix()
     updated_count = 0
 
@@ -167,7 +167,7 @@ def generate_investigation_with_data(
     work_dir: Path,
     template_path: Path,
     n_files: int | None = None,
-) -> tuple[Path, list[Path]]:
+) -> Tuple[Path, List[Path]]:
     """
     PoC behaviour:
 
@@ -186,7 +186,7 @@ def generate_investigation_with_data(
     isa_obj = json.loads(template_path.read_text())
 
     assays = _get_all_assays(isa_obj)
-    generated_paths: list[Path] = []
+    generated_paths: List[Path] = []
     if assays:
         data_dir = work_dir / "data"
         generated_paths = _update_datafiles_with_generated_files(

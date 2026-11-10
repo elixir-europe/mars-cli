@@ -1,4 +1,5 @@
 import json
+from typing import List, Optional
 from pydantic import BaseModel, field_validator, Field, ConfigDict
 import pydantic.alias_generators
 from mars_lib.target_repo import TargetRepository
@@ -11,15 +12,15 @@ class Filter(BaseModel):
 
 class Path(BaseModel):
     key: str
-    where: Filter | None = None
+    where: Optional[Filter] = None
 
 
 class Accession(BaseModel):
-    path: list[Path] = []
+    path: List[Path] = []
     value: str
 
     @field_validator("path")
-    def validate_path(cls, path: list[Path]) -> list[Path]:
+    def validate_path(cls, path: List[Path]) -> List[Path]:
         keys = [p.key for p in path]
         if len(keys) != len(set(keys)):
             raise ValueError("Duplicate keys found in path list")
@@ -29,11 +30,11 @@ class Accession(BaseModel):
 class Error(BaseModel):
     type: str
     message: str
-    path: list[Path] = []
+    path: List[Path] = []
 
 
 class Info(BaseModel):
-    name: str | None = None
+    name: Optional[str] = None
     message: str
 
 
@@ -42,9 +43,9 @@ class RepositoryResponse(BaseModel):
     model_config = ConfigDict(alias_generator=pydantic.alias_generators.to_camel)
 
     target_repository: str = Field(alias="targetRepository")
-    accessions: list[Accession] = []
-    errors: list[Error] = []
-    info: list[Info] = []
+    accessions: List[Accession] = []
+    errors: List[Error] = []
+    info: List[Info] = []
 
     @field_validator("target_repository")
     def validate_target_repository(cls, v: str) -> str:

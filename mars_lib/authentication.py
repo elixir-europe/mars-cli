@@ -1,4 +1,5 @@
 import io
+from typing import Optional, Union
 import requests
 import json
 from enum import Enum
@@ -23,7 +24,7 @@ class AuthProvider(Enum):
 
 
 def load_credentials(
-    credentials_file: io.TextIOWrapper | str,
+    credentials_file: Union[io.TextIOWrapper, str],
 ) -> dict[str, dict[str, str]]:
     """
     Validate the credentials.
@@ -69,7 +70,7 @@ def get_webin_auth_token(
     header: dict[str, str] = {"Content-Type": "application/json"},
     auth_base_url: str = "https://wwwdev.ebi.ac.uk/ena/dev/submit/webin/auth/token",
     token_expiration_time: int = 1,
-) -> str | None:
+) -> Optional[str]:
     """
     Obtain Webin authentication token.
 
@@ -111,7 +112,7 @@ def get_metabolights_auth_token(
         "Accept": "application/json",
     },
     auth_url: str = "https://www-test.ebi.ac.uk/metabolights/mars/ws3/auth/token",
-) -> str | None:
+) -> Optional[str]:
     """
     Obtain Webin authentication token.
 
