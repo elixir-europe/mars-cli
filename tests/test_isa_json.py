@@ -758,7 +758,7 @@ def test_map_data_files_to_repositories():
     map_data_files_to_repositories(duplicated_files, investigation)
 
 
-BH2024_ISA_JSON = "MARS/test-data/ISA-BH2024-ALL/isa-bh2024-all.json"
+TEST_ISA_JSON = "MARS/test-data/ena-complete.json"
 
 
 def _isa_data_file_names(investigation) -> set[str]:
@@ -771,7 +771,7 @@ def _isa_data_file_names(investigation) -> set[str]:
 
 
 def test_check_data_files_all_matched():
-    investigation = load_investigation(BH2024_ISA_JSON)
+    investigation = load_investigation(TEST_ISA_JSON)
     files = [f"data/{name}" for name in sorted(_isa_data_file_names(investigation))]
 
     report = check_data_files(files, investigation)
@@ -782,7 +782,7 @@ def test_check_data_files_all_matched():
 
 
 def test_check_data_files_reports_unreferenced_and_missing():
-    investigation = load_investigation(BH2024_ISA_JSON)
+    investigation = load_investigation(TEST_ISA_JSON)
     names = sorted(_isa_data_file_names(investigation))
     absent = names[0]
     present = names[1:]
@@ -796,7 +796,7 @@ def test_check_data_files_reports_unreferenced_and_missing():
 
 
 def test_check_data_files_without_files_reports_all_missing():
-    investigation = load_investigation(BH2024_ISA_JSON)
+    investigation = load_investigation(TEST_ISA_JSON)
 
     report = check_data_files([], investigation)
 

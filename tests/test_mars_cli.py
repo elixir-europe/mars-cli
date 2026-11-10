@@ -128,13 +128,13 @@ def test_submit_rejects_nonexistent_data_folder(mars_cli, isa_json_file, tmp_pat
     mock_submission.assert_not_called()
 
 
-BH2024_ISA_JSON = Path("MARS/test-data/ISA-BH2024-ALL/isa-bh2024-all.json")
+TEST_ISA_JSON = Path("MARS/test-data/ena-complete.json")
 
 
 def _isa_data_file_names() -> list[str]:
     from mars_lib.isa_json import load_investigation
 
-    investigation = load_investigation(str(BH2024_ISA_JSON))
+    investigation = load_investigation(str(TEST_ISA_JSON))
     return sorted(
         {
             df.name
@@ -147,7 +147,7 @@ def _isa_data_file_names() -> list[str]:
 
 def _invoke_check(mars_cli, *extra_args):
     return CliRunner().invoke(
-        mars_cli.cli, ["check-data-files", str(BH2024_ISA_JSON), *extra_args]
+        mars_cli.cli, ["check-data-files", str(TEST_ISA_JSON), *extra_args]
     )
 
 
@@ -217,7 +217,7 @@ def test_submission_fails_before_submitting_when_data_files_are_missing(
                 metabolights_username="",
                 metabolights_ftp_username="",
                 credentials_file=credentials_file,
-                isa_json_file=str(BH2024_ISA_JSON),
+                isa_json_file=str(TEST_ISA_JSON),
                 target_repositories=["biosamples"],
                 urls={},
                 file_transfer="ftp",
