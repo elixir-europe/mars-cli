@@ -149,6 +149,11 @@ Each of the target repositories have a set of settings:
 - production-url: URL to the production server when performing a health-check
 - production-submission-url: URL to the production server when performing a submissionW
 
+ENA and MetaboLights also have a `development-study-page-url` and `production-study-page-url`: the base URL of their
+study pages, used to link the submitted studies to the BioSamples records (see
+[Extending BioSamples' records](#feature--extending-biosamples-records)). They default to the ENA browser
+(`https://www.ebi.ac.uk/ena/browser/view/`) and MetaboLights (`https://www.ebi.ac.uk/metabolights/`) pages.
+
 ## Usage
 
 If you wish to use a different location for the `.mars' folder:
@@ -331,17 +336,24 @@ __Note:__ The root level of the ISA-JSON __IS__ the investigation. ISA-JSON file
 `investigation` key are not supported.
 
 ## Feature:  Extending BioSamples' records
-> **Status**: 🚧 To Be Developed
 
-This part is designed to interact with the BioSamples database, allowing operations like fetching, updating, and extending biosample records.
-The script takes in a dictionary of BioSamples' accessions and their associated external references, and expands the former with the latter.
+After a submission to ENA and/or MetaboLights, MARS-CLI links the new studies to the BioSamples records of the samples
+they were made from, as `externalReferences`:
 
+- **ENA**: every sample used in an ENA assay gets a link to the ENA study of that assay
+  (e.g. `https://www.ebi.ac.uk/ena/browser/view/ERP123456`, which shows the `PRJEB...` project).
+- **MetaboLights**: every sample used in a MetaboLights assay gets a link to the MetaboLights study
+  (e.g. `https://www.ebi.ac.uk/metabolights/MTBLS1234`).
+
+The records are updated with the Webin credentials, so they must belong to the same Webin account.
+The submission has already succeeded at this point: if a record cannot be updated, a warning is logged and the
+submission continues.
 
 To summarize, the steps of the code are:
-1. Takes the BioSamples' submitter credentials and a set of BioSamples accessions and their associated external references
-2. Validates inputs
-3. For each BioSamples' accession, it downloads its JSON record from BioSamples
-4. Extend the BioSamples' JSON with the ``externalReferences`` of the input file
+1. Collect, per BioSamples accession, the study links of the assays the sample is used in
+2. Validate them against `mars_lib/biosamples-input-schema.json`
+3. For each BioSamples accession, download its JSON record from BioSamples
+4. Extend the record's ``externalReferences`` with the new links, skipping the ones already present
 5. Submit the extended JSON to BioSamples to replace the existing one
 
 

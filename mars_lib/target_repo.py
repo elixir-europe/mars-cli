@@ -41,6 +41,11 @@ class TargetRepository(str, Enum):
                         "development-data-submission-url",
                         fallback="webin2.ebi.ac.uk",
                     ),
+                    "STUDY-PAGE": config.get(
+                        "ena",
+                        "development-study-page-url",
+                        fallback="https://wwwdev.ebi.ac.uk/ena/browser/view/",
+                    ),
                 },
                 "WEBIN": {
                     "SERVICE": config.get(
@@ -70,6 +75,11 @@ class TargetRepository(str, Enum):
                         "development-token-url",
                         fallback="https://www-test.ebi.ac.uk/metabolights/mars/ws3/auth/token",
                     ),
+                    "STUDY-PAGE": config.get(
+                        "metabolights",
+                        "development-study-page-url",
+                        fallback="https://www-test.ebi.ac.uk/metabolights/",
+                    ),
                 },
                 "BIOSAMPLES": {
                     "SERVICE": config.get(
@@ -82,6 +92,9 @@ class TargetRepository(str, Enum):
                         "development-submission-url",
                         fallback="https://wwwdev.ebi.ac.uk/biosamples/samples/",
                     ),
+                    # BioSamples itself, to read and update records. Not configurable:
+                    # the URLs above can point to the MARS BioSamples service instead.
+                    "SAMPLES": "https://wwwdev.ebi.ac.uk/biosamples/samples/",
                 },
             },
             "PROD": {
@@ -100,6 +113,11 @@ class TargetRepository(str, Enum):
                         "ena",
                         "development-data-submission-url",
                         fallback="webin2.ebi.ac.uk",
+                    ),
+                    "STUDY-PAGE": config.get(
+                        "ena",
+                        "production-study-page-url",
+                        fallback="https://www.ebi.ac.uk/ena/browser/view/",
                     ),
                 },
                 "WEBIN": {
@@ -130,6 +148,11 @@ class TargetRepository(str, Enum):
                         "production-token-url",
                         fallback="https://www-test.ebi.ac.uk/metabolights/mars/ws3/auth/token",
                     ),
+                    "STUDY-PAGE": config.get(
+                        "metabolights",
+                        "production-study-page-url",
+                        fallback="https://www.ebi.ac.uk/metabolights/",
+                    ),
                 },
                 "BIOSAMPLES": {
                     "SERVICE": config.get(
@@ -142,6 +165,7 @@ class TargetRepository(str, Enum):
                         "production-submission-url",
                         fallback="https://www.ebi.ac.uk/biosamples/samples/",
                     ),
+                    "SAMPLES": "https://www.ebi.ac.uk/biosamples/samples/",
                 },
             },
         }
