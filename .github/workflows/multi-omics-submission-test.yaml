@@ -133,4 +133,3 @@ jobs:
         working-directory: ${{ env.REPOSITORY_SERVICES_PATH }}
         run: |
           docker compose down --volumes
-    

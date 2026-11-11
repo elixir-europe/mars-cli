@@ -35,6 +35,7 @@ dev = [
     "types-retry",
     "types-jsonschema",
     "keyrings.alt",
+    "pre-commit>=4.7.0",
 ]
 
 [build-system]
