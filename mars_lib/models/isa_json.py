@@ -194,7 +194,7 @@ class Assay(CommentedIsaBase):
     # The 'target_repository' comment is mandatory, so the comments are also
     # validated when the key is absent (pydantic skips validators on defaults).
     comments: list[Comment] = Field(default_factory=list, validate_default=True)
-    characteristicCategories: list[MaterialAttribute] = Field(min_length=1)
+    characteristicCategories: list[MaterialAttribute] = []
     dataFiles: list[Data]
     filename: str
     materials: AssayMaterialType

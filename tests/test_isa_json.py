@@ -145,7 +145,6 @@ def test_minimal_documents_are_valid():
         (Assay, "filename"),
         (Assay, "materials"),
         (Assay, "dataFiles"),
-        (Assay, "characteristicCategories"),
         (Assay, "processSequence"),
     ],
 )
@@ -167,13 +166,24 @@ def test_mandatory_fields_are_required(model, field):
         (Study, "protocols"),
         (Study, "processSequence"),
         (Study, "characteristicCategories"),
-        (Assay, "characteristicCategories"),
         (Assay, "processSequence"),
     ],
 )
 def test_one_to_n_lists_cannot_be_empty(model, field):
     with pytest.raises(ValidationError, match="at least 1 item"):
         model.model_validate(minimal(model, **{field: []}))
+
+
+def test_assay_characteristic_categories_are_optional():
+    without_key = minimal(Assay)
+    del without_key["characteristicCategories"]
+
+    assert Assay.model_validate(without_key).characteristicCategories == []
+    assert (
+        Assay.model_validate(minimal(Assay, characteristicCategories=[]))
+        .characteristicCategories
+        == []
+    )
 
 
 def test_study_requires_organism_characteristic_category():
