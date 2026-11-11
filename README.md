@@ -333,9 +333,9 @@ Not referenced in the ISA JSON: ../data/not-in-isa.fastq
 Missing data file: rna-seq-data-3.fastq
 ```
 
-Unreferenced files are logged as warnings and skipped during submission. Missing files are logged as errors and make
-the command exit with a non-zero status. `submit` runs the same check first and stops before anything is sent if a
-file is missing. The counts are logged at `INFO`, so they only show if your `log_level` is `INFO` or lower.
+Unreferenced files are skipped during submission. The command exits with a non-zero status if a data file is missing,
+or if more than one file in the data folders has the name of the same data file in the ISA-JSON. `submit` runs the
+same check first and stops before anything is sent if either happens.
 
 ## Feature:  Extending BioSamples' records
 
@@ -384,7 +384,7 @@ python mars_cli.py --development submit --submit-to-metabolights False --submit-
 ### Submit data files and isa-json and to biosamples and ENA
 
 ```bash
-python mars_cli.py --credential-service-name biosamples  --username-credentials <username> --file-transfer ftp --data-files ../data/ENA_data.R1.fastq.gz --submit-to-metabolights False --output final-isa ../data/ena-minimal.json
+python mars_cli.py --credential-service-name biosamples  --username-credentials <username> --file-transfer ftp --data-folder ../data --submit-to-metabolights False --output final-isa ../data/ena-minimal.json
 ```
 
 ### Submit data files and isa-json to Metabolights
@@ -392,7 +392,7 @@ python mars_cli.py --credential-service-name biosamples  --username-credentials 
 Work in progress, currently data transfer is not supported yet.
 
 ```bash
-python mars_cli.py --credential-service-name metabolights  --username-credentials <username> --file-transfer ftp --data-files ../data/metpro-analysis.txt <additional *.mzml data files> --submit-to-biosamples False --submit-to-ena False --output final-isa ../data/metabolights-lcms.json
+python mars_cli.py --credential-service-name metabolights  --username-credentials <username> --file-transfer ftp --data-folder ../data --submit-to-biosamples False --submit-to-ena False --output final-isa ../data/metabolights-lcms.json
 ```
 
 ## Deploy repository services

@@ -532,7 +532,7 @@ def map_data_files_to_repositories(
         assay for study in investigation.studies for assay in study.assays
     ]
 
-    files_dicts = [{"full_name": f, "short_name": f.split("/")[-1]} for f in files]
+    files_dicts = [{"full_name": f, "short_name": os.path.basename(f)} for f in files]
     remaining_files = files_dicts.copy()
     for assay in assays:
         target_repo_comment: Comment = detect_target_repo_comment(assay.comments)
