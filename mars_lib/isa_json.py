@@ -591,16 +591,19 @@ class DataFileCheckReport:
         matched: Passed files that match a data file in the ISA-JSON.
         unreferenced: Passed files that are not referenced in the ISA-JSON.
         missing: Names of ISA-JSON data files without a matching passed file.
+        duplicates: For every ISA-JSON data file name matched by more than one
+            distinct passed path, the paths sharing that name.
     """
 
     matched: list[str] = field(default_factory=list)
     unreferenced: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
+    duplicates: dict[str, list[str]] = field(default_factory=dict)
 
     def log(self, header: str = "Data file check:") -> None:
         """
         Logs the report: the counts at INFO level, every unreferenced file as a
-        WARNING and every missing data file as an ERROR.
+        WARNING and every missing or duplicate data file as an ERROR.
         """
         print_and_log(
             f"{header}\n"
@@ -612,17 +615,27 @@ class DataFileCheckReport:
             print_and_log(f"Not referenced in the ISA JSON: {file}", level="warning")
         for name in self.missing:
             print_and_log(f"Missing data file: {name}", level="error")
+        for name, paths in self.duplicates.items():
+            print_and_log(
+                f"Duplicate data file name '{name}': {', '.join(paths)}", level="error"
+            )
 
     def to_text(self, header: str = "Data file check:") -> str:
-        """Returns the report as plain text, listing the unreferenced and missing files."""
+        """Returns the report as plain text, listing the unreferenced, missing and duplicate files."""
         lines = [
             header,
             f"- Data files matched to a data file in the ISA JSON: {len(self.matched)}",
             f"- Data files not referenced in the ISA JSON: {len(self.unreferenced)}",
             f"- ISA JSON data files without a matching data file: {len(self.missing)}",
         ]
-        lines += [f"Not referenced in the ISA JSON: {file}" for file in self.unreferenced]
+        lines += [
+            f"Not referenced in the ISA JSON: {file}" for file in self.unreferenced
+        ]
         lines += [f"Missing data file: {name}" for name in self.missing]
+        lines += [
+            f"Duplicate data file name '{name}': {', '.join(paths)}"
+            for name, paths in self.duplicates.items()
+        ]
         return "\n".join(lines)
 
 
@@ -637,7 +650,7 @@ def check_data_files(
         investigation (Investigation): The ISA-JSON investigation.
 
     Returns:
-        DataFileCheckReport: Matched, unreferenced and missing data files.
+        DataFileCheckReport: Matched, unreferenced, missing and duplicate data files.
     """
     isa_names = {
         df.name
@@ -655,4 +668,11 @@ def check_data_files(
 
     passed_names = {os.path.basename(f) for f in files}
     report.missing = sorted(isa_names - passed_names)
+
+    paths_by_name: dict[str, list[str]] = {}
+    for file in report.matched:
+        paths_by_name.setdefault(os.path.basename(file), []).append(file)
+    report.duplicates = {
+        name: paths for name, paths in paths_by_name.items() if len(set(paths)) > 1
+    }
     return report

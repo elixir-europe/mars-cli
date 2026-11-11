@@ -259,7 +259,7 @@ def check_data_files_command(isa_json_file, data_folder):
         )
     )
 
-    if report.missing:
+    if report.missing or report.duplicates:
         sys.exit(1)
 
 

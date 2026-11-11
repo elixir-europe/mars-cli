@@ -795,6 +795,28 @@ def test_check_data_files_reports_unreferenced_and_missing():
     assert report.missing == [absent]
 
 
+def test_check_data_files_reports_duplicate_names():
+    investigation = load_investigation(TEST_ISA_JSON)
+    names = sorted(_isa_data_file_names(investigation))
+    files = [f"data/{name}" for name in names]
+    files += [f"other/{names[0]}", "a/not-in-isa.fastq", "b/not-in-isa.fastq"]
+
+    report = check_data_files(files, investigation)
+
+    # Only names referenced in the ISA JSON are ambiguous; unreferenced duplicates are not
+    assert report.duplicates == {names[0]: [f"data/{names[0]}", f"other/{names[0]}"]}
+    assert f"Duplicate data file name '{names[0]}'" in report.to_text()
+
+
+def test_check_data_files_ignores_same_path_passed_twice():
+    investigation = load_investigation(TEST_ISA_JSON)
+    files = [f"data/{name}" for name in sorted(_isa_data_file_names(investigation))]
+
+    report = check_data_files(files + files[:1], investigation)
+
+    assert report.duplicates == {}
+
+
 def test_check_data_files_without_files_reports_all_missing():
     investigation = load_investigation(TEST_ISA_JSON)
 
