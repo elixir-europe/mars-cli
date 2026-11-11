@@ -200,6 +200,46 @@ def test_check_data_files_succeeds_when_everything_matches(
     assert _records(caplog, logging.ERROR) == []
 
 
+def test_check_data_files_rejects_a_file_as_data_folder(mars_cli, tmp_path):
+    a_file = tmp_path / "reads.fastq"
+    a_file.write_text("")
+
+    result = _invoke_check(mars_cli, "--data-folder", str(a_file))
+
+    assert result.exit_code == 2
+    assert "is a file" in result.output
+
+
+def test_submit_rejects_a_file_as_data_folder(mars_cli, isa_json_file, tmp_path):
+    a_file = tmp_path / "reads.fastq"
+    a_file.write_text("")
+
+    result, mock_submission = _invoke_submit(
+        mars_cli, isa_json_file, "--data-folder", str(a_file)
+    )
+
+    assert result.exit_code == 2
+    assert "is a file" in result.output
+    mock_submission.assert_not_called()
+
+
+def test_check_data_files_reports_invalid_isa_json_without_traceback(
+    mars_cli, tmp_path, caplog
+):
+    invalid = tmp_path / "invalid.json"
+    invalid.write_text('{"unexpected": 1}')
+
+    result = CliRunner().invoke(mars_cli.cli, ["check-data-files", str(invalid)])
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert any(
+        "Validation errors occurred" in r.getMessage()
+        for r in caplog.records
+        if r.levelno == logging.ERROR
+    )
+
+
 def test_submission_fails_before_submitting_when_data_files_are_missing(
     mars_cli, tmp_path, monkeypatch
 ):

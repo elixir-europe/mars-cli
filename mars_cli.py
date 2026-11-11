@@ -116,7 +116,13 @@ def cli(ctx, development):
 )
 @click.option(
     "--data-folder",
-    type=click.Path(exists=True, dir_okay=True, readable=True, executable=True),
+    type=click.Path(
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        executable=True,
+    ),
     multiple=True,
     help="Path to a folder holding the files you want to upload. All files in the folder (recursively) are included. Can be passed multiple times.",
 )
@@ -240,16 +246,26 @@ def validate_investigation(isa_json_file):
 )
 @click.option(
     "--data-folder",
-    type=click.Path(exists=True, dir_okay=True, readable=True, executable=True),
+    type=click.Path(
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        executable=True,
+    ),
     multiple=True,
     help="Path to a folder holding the data files. All files in the folder (recursively) are included. Can be passed multiple times.",
 )
 def check_data_files_command(isa_json_file, data_folder):
     """Check that the data files in the ISA JSON match the files in the data folders."""
-    investigation = load_investigation(isa_json_file.name)
+    try:
+        investigation = load_investigation(isa_json_file.name)
 
-    if isinstance(investigation, ValidationError):
-        raise investigation
+        if isinstance(investigation, ValidationError):
+            raise investigation
+    except ValidationError as err:
+        print_and_log(f"Validation errors occurred:\n{err}", level="error")
+        sys.exit(1)
 
     report = check_data_files(list_files_in_folders(data_folder), investigation)
 

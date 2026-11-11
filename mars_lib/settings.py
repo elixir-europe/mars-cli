@@ -16,7 +16,7 @@ def create_settings_file(settings_dir):
     settings_path = settings_dir / "settings.ini"
     config = configparser.ConfigParser()
     config["logging"] = {
-        "log_level": "INFO",
+        "log_level": "ERROR",
         "log_file": log_path,
         "log_max_size": "1024",
         "log_max_files": "5",
