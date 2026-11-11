@@ -22,6 +22,7 @@ from mars_lib.biosamples_external_references import (
 )
 from mars_lib.credential import CredentialManager
 from mars_lib.isa_json import (
+    check_data_files,
     load_investigation,
     reduce_investigation_for_target_repo,
     update_investigation,
@@ -58,7 +59,7 @@ def submission(
     urls: dict[str, Any],
     file_transfer: str,
     output: str,
-    data_file_paths: list[TextIOWrapper] = [],
+    data_file_paths: list[str] = [],
 ) -> None:
     # If credential manager info found:
     # Get password from the credential manager
@@ -90,6 +91,22 @@ def submission(
         raise ValidationError(f"ISA JSON is invalid: {investigation}")
 
     print_and_log(f"ISA JSON with investigation '{investigation.title}' is valid.")
+
+    # Check that every data file in the ISA-JSON is matched by a passed file
+    data_file_report = check_data_files(
+        [str(dfp) for dfp in data_file_paths], investigation
+    )
+    data_file_report.log()
+    if data_file_report.missing:
+        raise ValueError(
+            "Data files referenced in the ISA JSON are missing from the data files "
+            f"passed in the command: {', '.join(data_file_report.missing)}"
+        )
+    if data_file_report.duplicates:
+        raise ValueError(
+            "Multiple data files share the name of a data file in the ISA JSON: "
+            f"{', '.join(data_file_report.duplicates)}"
+        )
 
     # create data file map
     data_file_map = map_data_files_to_repositories(

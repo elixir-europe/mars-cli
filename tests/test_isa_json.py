@@ -6,6 +6,7 @@ from mars_lib.isa_json import (
     load_investigation,
     update_investigation,
     map_data_files_to_repositories,
+    check_data_files,
     is_assay_for_target_repo,
 )
 from mars_lib.target_repo import TargetRepository, TARGET_REPO_KEY

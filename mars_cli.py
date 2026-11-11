@@ -9,7 +9,7 @@ from pydantic_core import ValidationError
 import requests
 
 from mars_lib.credential import CredentialManager
-from mars_lib.isa_json import load_investigation
+from mars_lib.isa_json import check_data_files, load_investigation
 from mars_lib.logging import init_logging, print_and_log
 from mars_lib.settings import generate_config
 from mars_lib.submit import submission
@@ -36,6 +36,16 @@ init_logging(config, fallback_log_file)
 
 # Read in all the URLs from the config file
 urls = TargetRepository.get_repository_urls_from_config(config)
+
+
+def list_files_in_folders(folders) -> list[str]:
+    """Recursively list every file in the provided folders."""
+    return [
+        os.path.join(root, file_name)
+        for folder in folders
+        for root, _dirs, file_names in os.walk(folder)
+        for file_name in sorted(file_names)
+    ]
 
 
 @click.group()
@@ -105,10 +115,16 @@ def cli(ctx, development):
     help="provide the name of a file transfer solution, like ftp or aspera. The default is ftp.",
 )
 @click.option(
-    "--data-files",
-    type=click.File("r"),
+    "--data-folder",
+    type=click.Path(
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        executable=True,
+    ),
     multiple=True,
-    help="Path of files to upload",
+    help="Path to a folder holding the files you want to upload. All files in the folder (recursively) are included. Can be passed multiple times.",
 )
 @click.option(
     "--submit-to-metabolights",
@@ -134,7 +150,7 @@ def submit(
     submit_to_metabolights,
     file_transfer,
     output,
-    data_files,
+    data_folder,
 ):
     """Start a submission to the target repositories."""
     target_repositories = []
@@ -154,7 +170,7 @@ def submit(
 
     urls_dict = ctx.obj["FILTERED_URLS"]
 
-    data_file_paths = [f.name for f in data_files] if file_transfer else []
+    data_file_paths = list_files_in_folders(data_folder)
 
     submission(
         webin_username,
@@ -221,6 +237,46 @@ def validate_investigation(isa_json_file):
         print_and_log(f"ISA JSON with investigation '{investigation.title}' is valid.")
     except ValidationError as err:
         print_and_log(f"Validation errors occurred:\n{err}", level="error")
+
+
+@cli.command("check-data-files")
+@click.argument(
+    "isa_json_file",
+    type=click.File("r"),
+)
+@click.option(
+    "--data-folder",
+    type=click.Path(
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        executable=True,
+    ),
+    multiple=True,
+    help="Path to a folder holding the data files. All files in the folder (recursively) are included. Can be passed multiple times.",
+)
+def check_data_files_command(isa_json_file, data_folder):
+    """Check that the data files in the ISA JSON match the files in the data folders."""
+    try:
+        investigation = load_investigation(isa_json_file.name)
+
+        if isinstance(investigation, ValidationError):
+            raise investigation
+    except ValidationError as err:
+        print_and_log(f"Validation errors occurred:\n{err}", level="error")
+        sys.exit(1)
+
+    report = check_data_files(list_files_in_folders(data_folder), investigation)
+
+    click.echo(
+        report.to_text(
+            f"Data file check for ISA JSON with investigation '{investigation.title}':"
+        )
+    )
+
+    if report.missing or report.duplicates:
+        sys.exit(1)
 
 
 @cli.command()

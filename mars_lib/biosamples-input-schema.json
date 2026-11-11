@@ -26,7 +26,7 @@
                         "description": "A single valid BioSample accession. See more at: https://registry.identifiers.org/registry/biosample",
                         "minLength": 1,
                         "pattern": "^SAM[NED](\\w)?\\d+$",
-                        "examples": [ "SAMEA112654119" ]
+                        "examples": ["SAMEA112654119"]
                     },
                     "externalReferences": {
                         "type": "array",
@@ -42,9 +42,7 @@
                             "additionalProperties": false,
                             "required": ["url"],
                             "properties": {
-                                "url": {
-                                    "type": "string"
-                                },
+                                "url": {"type": "string"},
                                 "duo": {
                                     "description": "Data use ontology terms ",
                                     "type": "array",
