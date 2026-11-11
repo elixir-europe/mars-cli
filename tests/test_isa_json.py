@@ -944,6 +944,7 @@ ISA_JSON_TEST_FILES = [
     "MARS/test-data/biosamples-original-isa-no-accesion-char.json",
     "MARS/test-data/ena-complete.json",
     "MARS/test-data/metabolights-input-isa.json",
+    "MARS/test-data/HoloFoodinISA_v1.0.json",
     "tests/fixtures/isa_jsons/1_after_biosamples.json",
 ]
 
