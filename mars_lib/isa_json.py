@@ -613,6 +613,18 @@ class DataFileCheckReport:
         for name in self.missing:
             print_and_log(f"Missing data file: {name}", level="error")
 
+    def to_text(self, header: str = "Data file check:") -> str:
+        """Returns the report as plain text, listing the unreferenced and missing files."""
+        lines = [
+            header,
+            f"- Data files matched to a data file in the ISA JSON: {len(self.matched)}",
+            f"- Data files not referenced in the ISA JSON: {len(self.unreferenced)}",
+            f"- ISA JSON data files without a matching data file: {len(self.missing)}",
+        ]
+        lines += [f"Not referenced in the ISA JSON: {file}" for file in self.unreferenced]
+        lines += [f"Missing data file: {name}" for name in self.missing]
+        return "\n".join(lines)
+
 
 def check_data_files(
     files: list[str], investigation: Investigation

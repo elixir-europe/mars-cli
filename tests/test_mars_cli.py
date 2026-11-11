@@ -167,15 +167,17 @@ def test_check_data_files_reports_counts(mars_cli, tmp_path, caplog):
     result = _invoke_check(mars_cli, "--data-folder", str(data))
 
     assert result.exit_code == 1, result.output
-    report = "\n".join(_records(caplog, logging.INFO))
-    assert f"matched to a data file in the ISA JSON: {len(names) - 1}" in report
-    assert "not referenced in the ISA JSON: 1" in report
-    assert "without a matching data file: 1" in report
-    # Unreferenced files are logged as warnings, missing files as errors
-    assert _records(caplog, logging.WARNING) == [
-        f"Not referenced in the ISA JSON: {data / 'not-in-isa.fastq'}"
-    ]
-    assert _records(caplog, logging.ERROR) == [f"Missing data file: {names[0]}"]
+    assert f"matched to a data file in the ISA JSON: {len(names) - 1}" in result.output
+    assert "not referenced in the ISA JSON: 1" in result.output
+    assert "without a matching data file: 1" in result.output
+    assert (
+        f"Not referenced in the ISA JSON: {data / 'not-in-isa.fastq'}" in result.output
+    )
+    assert f"Missing data file: {names[0]}" in result.output
+    # The report goes to stdout only, not to the log
+    assert "matched to a data file" not in "\n".join(r.getMessage() for r in caplog.records)
+    assert _records(caplog, logging.WARNING) == []
+    assert _records(caplog, logging.ERROR) == []
 
 
 def test_check_data_files_succeeds_when_everything_matches(
@@ -191,10 +193,9 @@ def test_check_data_files_succeeds_when_everything_matches(
     result = _invoke_check(mars_cli, "--data-folder", str(data))
 
     assert result.exit_code == 0, result.output
-    report = "\n".join(_records(caplog, logging.INFO))
-    assert f"matched to a data file in the ISA JSON: {len(names)}" in report
-    assert "not referenced in the ISA JSON: 0" in report
-    assert "without a matching data file: 0" in report
+    assert f"matched to a data file in the ISA JSON: {len(names)}" in result.output
+    assert "not referenced in the ISA JSON: 0" in result.output
+    assert "without a matching data file: 0" in result.output
     assert _records(caplog, logging.WARNING) == []
     assert _records(caplog, logging.ERROR) == []
 

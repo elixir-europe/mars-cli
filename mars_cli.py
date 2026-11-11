@@ -253,8 +253,10 @@ def check_data_files_command(isa_json_file, data_folder):
 
     report = check_data_files(list_files_in_folders(data_folder), investigation)
 
-    report.log(
-        f"Data file check for ISA JSON with investigation '{investigation.title}':"
+    click.echo(
+        report.to_text(
+            f"Data file check for ISA JSON with investigation '{investigation.title}':"
+        )
     )
 
     if report.missing:
