@@ -176,7 +176,7 @@ def test_update_initiation_comments_replaces_repository_comments_and_preserves_o
     )
     initiation = InitiationResponse(
         submission_id="new-id",
-        assay_comments={"sample_accession": "SAMPLE123", "empty_comment": None},
+        assay_comments={"sample_accession": "SAMPLE123", "empty_comment": ""},
     )
 
     update_initiation_comments(investigation, "ena", initiation)

@@ -39,7 +39,7 @@ class DataTransferProtocol(enum.StrEnum):
 
 
 class AbstractClientModel(BaseModel):
-    model_config = ConfigDict(alias_generator=to_camel)
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 class Token(AbstractClientModel):
