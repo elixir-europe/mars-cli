@@ -2,12 +2,24 @@ from __future__ import annotations
 
 import re
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from mars_lib.target_repo import TargetRepository, TARGET_REPO_KEY
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from mars_lib.target_repo import TARGET_REPO_KEY, TargetRepository
 
 
 class IsaBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class IsaReference(IsaBase):
+    """
+    A reference to an object defined elsewhere in the ISA JSON, by '@id'
+    (e.g. process inputs/outputs, 'executesProtocol', 'derivesFrom').
+    """
+
+    id: str = Field(alias="@id")
+    name: str | None = None
+    type: str | None = None
 
 
 class Comment(IsaBase):
@@ -21,6 +33,7 @@ class CommentedIsaBase(IsaBase):
 
 
 class OntologySourceReference(CommentedIsaBase):
+    id: str | None = Field(alias="@id", default=None)
     description: str | None = None
     file: str | None = None
     name: str | None = None
@@ -28,8 +41,8 @@ class OntologySourceReference(CommentedIsaBase):
 
 
 class Data(CommentedIsaBase):
-    id: str | None = Field(alias="@id", default=None)
-    name: str | None = None
+    id: str = Field(alias="@id")
+    name: str
     type: str | None = None
 
 
@@ -46,7 +59,7 @@ class OntologyAnnotation(CommentedIsaBase):
 # TODO: QUESTION: comments field is not mentioned in the specs (https://isa-specs.readthedocs.io/en/latest/isajson.html#material-attribute-value-schema-json)
 class MaterialAttributeValue(CommentedIsaBase):
     id: str | None = Field(alias="@id", default=None)
-    category: MaterialAttribute | None = None
+    category: MaterialAttribute
     value: str | float | int | OntologyAnnotation | None = None
     unit: OntologyAnnotation | None = None
 
@@ -59,36 +72,36 @@ class Factor(CommentedIsaBase):
 
 class FactorValue(IsaBase):
     id: str | None = Field(alias="@id", default=None)
-    category: Factor | None = None
+    category: Factor
     value: str | float | int | OntologyAnnotation | None = None
     unit: OntologyAnnotation | None = None
 
 
 # TODO: QUESTION: comments field is not mentioned in the specs (https://isa-specs.readthedocs.io/en/latest/isajson.html#material-attribute-value-schema-json)
 class Source(CommentedIsaBase):
-    id: str | None = Field(alias="@id", default=None)
-    characteristics: list[MaterialAttributeValue] = []
-    name: str | None = None
+    id: str = Field(alias="@id")
+    characteristics: list[MaterialAttributeValue]
+    name: str
 
 
 # TODO: QUESTION: comments field is not mentioned in the specs (https://isa-specs.readthedocs.io/en/latest/isajson.html#material-attribute-value-schema-json)
 class Sample(CommentedIsaBase):
-    id: str | None = Field(alias="@id", default=None)
-    name: str | None = None
-    characteristics: list[MaterialAttributeValue] = []
+    id: str = Field(alias="@id")
+    name: str
+    characteristics: list[MaterialAttributeValue]
     factorValues: list[FactorValue] | None = None
-    derivesFrom: list[Source] = []
+    derivesFrom: list[IsaReference] = Field(min_length=1)
 
 
 class ProtocolParameter(IsaBase):
-    id: str | None = Field(alias="@id", default=None)
-    parameterName: OntologyAnnotation | None = None
+    id: str = Field(alias="@id")
+    parameterName: OntologyAnnotation | str
 
 
 class ProcessParameterValue(IsaBase):
-    category: ProtocolParameter | None = None
+    category: ProtocolParameter | IsaReference
     value: str | float | int | OntologyAnnotation | None = None
-    unit: OntologyAnnotation | list[OntologyAnnotation] | None = None
+    unit: OntologyAnnotation | None = None
 
 
 # Helper class for protocol -> components
@@ -98,10 +111,10 @@ class Component(IsaBase):
 
 
 class Protocol(CommentedIsaBase):
-    id: str | None = Field(alias="@id", default=None)
+    id: str = Field(alias="@id")
     components: list[Component] = []
     description: str | None = None
-    name: str | None = None
+    name: str
     parameters: list[ProtocolParameter] = []
     protocolType: OntologyAnnotation | None = None
     uri: str | None = None
@@ -109,29 +122,38 @@ class Protocol(CommentedIsaBase):
 
 
 class Material(CommentedIsaBase):
-    id: str | None = Field(alias="@id", default=None)
-    characteristics: list[MaterialAttributeValue] = []
-    name: str | None = None
+    id: str = Field(alias="@id")
+    characteristics: list[MaterialAttributeValue]
+    name: str
     type: str | None = None
-    derivesFrom: list[Material] = []
 
 
 class Process(CommentedIsaBase):
-    id: str | None = Field(alias="@id", default=None)
+    id: str = Field(alias="@id")
     date: str | None = None
-    executesProtocol: Protocol | None = None
-    inputs: list[Source] | list[Sample] | list[Material] | list[Data] = []
-    name: str | None = None
-    nextProcess: Process | None = None
-    outputs: list[Sample] | list[Material] | list[Data] = Field(default=[])
+    executesProtocol: IsaReference | Protocol
+    inputs: (
+        list[IsaReference] | list[Source] | list[Sample] | list[Material] | list[Data]
+    ) = Field(min_length=1)
+    name: str
+    nextProcess: IsaReference | Process | None = None
+    outputs: list[IsaReference] | list[Sample] | list[Material] | list[Data] = Field(
+        min_length=1
+    )
     parameterValues: list[ProcessParameterValue] = []
     performer: str | None = None
-    previousProcess: Process | None = None
+    previousProcess: IsaReference | Process | None = None
+
+    @field_validator("previousProcess", "nextProcess", mode="before")
+    def empty_link_is_no_link(cls, v: object) -> object:
+        # The first/last process of a sequence has no previous/next process,
+        # which is written as an empty object ('{}').
+        return None if v == {} else v
 
 
 # Helper for assay -> materials
 class AssayMaterialType(IsaBase):
-    samples: list[Sample] = []
+    samples: list[IsaReference] | list[Sample] = Field(min_length=1)
     otherMaterials: list[Material] = []
 
 
@@ -158,8 +180,8 @@ def _is_valid_filename(filename: str, prefix: str, arc_kind: str) -> bool:
     )
 
 
-def _validate_filename(filename: str | None, prefix: str, arc_kind: str) -> str | None:
-    if filename is None or _is_valid_filename(filename, prefix, arc_kind):
+def _validate_filename(filename: str | None, prefix: str, arc_kind: str) -> str:
+    if filename and _is_valid_filename(filename, prefix, arc_kind):
         return filename
     raise ValueError(
         f"'filename' should start with '{prefix}_' "
@@ -168,19 +190,23 @@ def _validate_filename(filename: str | None, prefix: str, arc_kind: str) -> str 
 
 
 class Assay(CommentedIsaBase):
-    id: str | None = Field(alias="@id", default=None)
+    id: str = Field(alias="@id")
+    # The 'target_repository' comment is mandatory, so the comments are also
+    # validated when the key is absent (pydantic skips validators on defaults).
+    comments: list[Comment] = Field(default_factory=list, validate_default=True)
+    # Can't be mandatory like on the study level!
     characteristicCategories: list[MaterialAttribute] = []
-    dataFiles: list[Data] = []
-    filename: str | None = None
-    materials: AssayMaterialType | None = None
+    dataFiles: list[Data]
+    filename: str
+    materials: AssayMaterialType
     measurementType: OntologyAnnotation | None = None
-    processSequence: list[Process] = []
+    processSequence: list[Process] = Field(min_length=1)
     technologyPlatform: str | None = None
     technologyType: OntologyAnnotation | None = None
     unitCategories: list[OntologyAnnotation] = []
 
     @field_validator("filename")
-    def validate_filename(cls, v: str | None) -> str | None:
+    def validate_filename(cls, v: str) -> str:
         return _validate_filename(v, "a", "assay")
 
     @field_validator("comments")
@@ -217,6 +243,7 @@ class Person(CommentedIsaBase):
 
 
 class Publication(CommentedIsaBase):
+    id: str | None = Field(alias="@id", default=None)
     authorList: str | None = None
     doi: str | None = None
     pubMedID: str | None = None
@@ -225,53 +252,69 @@ class Publication(CommentedIsaBase):
 
 
 class StudyMaterialType(IsaBase):
-    sources: list[Source] = []
-    samples: list[Sample] = []
+    sources: list[Source] = Field(min_length=1)
+    samples: list[Sample] = Field(min_length=1)
     otherMaterials: list[Material] = []
 
 
 class MaterialAttribute(IsaBase):
-    id: str | None = Field(alias="@id", default=None)
+    id: str = Field(alias="@id")
     characteristicType: OntologyAnnotation | None = None
 
 
 class Study(CommentedIsaBase):
-    id: str | None = Field(alias="@id", default=None)
+    id: str = Field(alias="@id")
     assays: list[Assay] = []
-    characteristicCategories: list[MaterialAttribute] = []
+    # A Study needs at least the organisms attribute
+    characteristicCategories: list[MaterialAttribute] = Field(min_length=1)
     description: str | None = None
     factors: list[Factor] = []
-    filename: str | None = None
+    filename: str
     identifier: str | None = None
-    materials: StudyMaterialType | None = None
+    materials: StudyMaterialType
     people: list[Person] = []
-    processSequence: list[Process] = []
-    protocols: list[Protocol] = []
+    processSequence: list[Process] = Field(min_length=1)
+    protocols: list[Protocol] = Field(min_length=1)
     publicReleaseDate: str | None = None
     publications: list[Publication] = []
     studyDesignDescriptors: list[OntologyAnnotation] = []
     submissionDate: str | None = None
-    title: str | None = None
+    title: str
     unitCategories: list[OntologyAnnotation] = []
 
     @field_validator("filename")
-    def validate_filename(cls, v: str | None) -> str | None:
+    def validate_filename(cls, v: str) -> str:
         return _validate_filename(v, "s", "study")
+
+    @field_validator("characteristicCategories")
+    def require_organism_category(
+        cls, v: list[MaterialAttribute]
+    ) -> list[MaterialAttribute]:
+        # Special rule: the 'organism' characteristic category is mandatory
+        # (required for BioSamples submissions).
+        if not any(
+            category.characteristicType is not None
+            and isinstance(category.characteristicType.annotationValue, str)
+            and category.characteristicType.annotationValue.lower() == "organism"
+            for category in v
+        ):
+            raise ValueError("'organism' characteristic category is missing")
+        return v
 
 
 class Investigation(CommentedIsaBase):
-    id: str | None = Field(alias="@id", default=None)
+    id: str = Field(alias="@id")
     description: str | None = None
-    filename: str | None = None
+    filename: str
     identifier: str | None = None
     ontologySourceReferences: list[OntologySourceReference] = []
     people: list[Person] = []
     publicReleaseDate: str | None = None
     publications: list[Publication] = []
-    studies: list[Study] = []
+    studies: list[Study] = Field(min_length=1)
     submissionDate: str | None = None
-    title: str | None = None
+    title: str
 
     @field_validator("filename")
-    def validate_filename(cls, v: str | None) -> str | None:
+    def validate_filename(cls, v: str) -> str:
         return _validate_filename(v, "i", "investigation")
