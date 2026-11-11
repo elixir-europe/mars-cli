@@ -2,9 +2,11 @@ import re
 
 
 from mars_lib.isa_json import (
+    find_submission_id_comment_value,
     reduce_investigation_for_target_repo,
     load_investigation,
     update_investigation,
+    update_initiation_comments,
     map_data_files_to_repositories,
     is_assay_for_target_repo,
 )
@@ -15,10 +17,15 @@ from mars_lib.models.isa_json import (
     Data,
     Material,
     Assay,
+    Comment,
     Person,
     Investigation,
     Study,
     _is_valid_filename,
+)
+from mars_lib.models.abstract_repository_client import (
+    InitiationResponse,
+    SUBMISSION_ID_KEY,
 )
 from mars_lib.models.repository_response import RepositoryResponse
 import json
@@ -82,6 +89,135 @@ def test_reduce_investigation_for_biosamples():
     )
 
     assert len(filtered_investigation.studies[0].assays) == 0
+
+
+def test_find_submission_id_comment_value_returns_first_value_across_studies():
+    investigation = Investigation.model_validate(
+        {
+            "studies": [
+                {
+                    "assays": [
+                        {
+                            "comments": [
+                                {"name": TARGET_REPO_KEY, "value": "ena"},
+                                {"name": SUBMISSION_ID_KEY, "value": "first-id"},
+                                {"name": SUBMISSION_ID_KEY, "value": "duplicate-id"},
+                            ]
+                        },
+                        {
+                            "comments": [
+                                {"name": TARGET_REPO_KEY, "value": "ena"},
+                                {"name": SUBMISSION_ID_KEY, "value": "later-id"},
+                            ]
+                        },
+                    ]
+                },
+                {
+                    "assays": [
+                        {
+                            "comments": [
+                                {"name": TARGET_REPO_KEY, "value": "metabolights"},
+                                {"name": SUBMISSION_ID_KEY, "value": "next-study-id"},
+                            ]
+                        }
+                    ]
+                },
+            ]
+        }
+    )
+
+    assert find_submission_id_comment_value(investigation) == "first-id"
+
+
+@pytest.mark.parametrize(
+    "investigation",
+    [
+        {"studies": []},
+        {"studies": [{"assays": []}]},
+        {
+            "studies": [
+                {"assays": [{"comments": [{"name": TARGET_REPO_KEY, "value": "ena"}]}]}
+            ]
+        },
+    ],
+)
+def test_find_submission_id_comment_value_returns_none_when_absent(investigation):
+    investigation = Investigation.model_validate(investigation)
+    assert find_submission_id_comment_value(investigation) is None
+
+
+def test_update_initiation_comments_replaces_repository_comments_and_preserves_others():
+    investigation = Investigation.model_validate(
+        {
+            "studies": [
+                {
+                    "assays": [
+                        {
+                            "@id": "matching",
+                            "comments": [
+                                {"name": TARGET_REPO_KEY, "value": "ena"},
+                                {"name": SUBMISSION_ID_KEY, "value": "old-id"},
+                                {"name": "sample_accession", "value": "old-sample"},
+                                {"name": "keep", "value": "preserved"},
+                            ],
+                        },
+                        {
+                            "@id": "other-repository",
+                            "comments": [
+                                {"name": TARGET_REPO_KEY, "value": "metabolights"},
+                                {"name": SUBMISSION_ID_KEY, "value": "other-id"},
+                                {"name": "keep", "value": "untouched"},
+                            ],
+                        },
+                    ]
+                }
+            ]
+        }
+    )
+    initiation = InitiationResponse(
+        submission_id="new-id",
+        assay_comments={"sample_accession": "SAMPLE123", "empty_comment": None},
+    )
+
+    update_initiation_comments(investigation, "ena", initiation)
+
+    matching_comments = investigation.studies[0].assays[0].comments
+    assert [(comment.name, comment.value) for comment in matching_comments] == [
+        (SUBMISSION_ID_KEY, "new-id"),
+        ("sample_accession", "SAMPLE123"),
+        ("empty_comment", ""),
+        (TARGET_REPO_KEY, "ena"),
+        ("keep", "preserved"),
+    ]
+    other_comments = investigation.studies[0].assays[1].comments
+    assert [(comment.name, comment.value) for comment in other_comments] == [
+        (TARGET_REPO_KEY, "metabolights"),
+        (SUBMISSION_ID_KEY, "other-id"),
+        ("keep", "untouched"),
+    ]
+
+
+def test_update_initiation_comments_without_new_submission_id_keeps_existing_id():
+    assay = Assay(
+        comments=[
+            Comment(name=TARGET_REPO_KEY, value="ena"),
+            Comment(name=SUBMISSION_ID_KEY, value="existing-id"),
+            Comment(name="sample_accession", value="old-accession"),
+        ]
+    )
+    investigation = Investigation(studies=[Study(assays=[assay])])
+
+    update_initiation_comments(
+        investigation,
+        "ena",
+        InitiationResponse(assay_comments={"sample_accession": "new-accession"}),
+    )
+
+    assert [(comment.name, comment.value) for comment in assay.comments] == [
+        ("sample_accession", "new-accession"),
+        (TARGET_REPO_KEY, "ena"),
+        (SUBMISSION_ID_KEY, "existing-id"),
+    ]
 
 
 def test_data_type_is_free_text():
