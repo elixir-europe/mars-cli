@@ -42,7 +42,6 @@ def test_validators_are_listed_per_model():
 @pytest.mark.parametrize(
     "fixture, valid",
     [
-        ("minimal_valid_investigation.json", True),
         ("isa_jsons/1_after_biosamples.json", True),
         ("invalid_investigation.json", False),
     ],

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -128,6 +129,12 @@ class Material(CommentedIsaBase):
     type: str | None = None
 
 
+def _allow_empty_link(schema: dict[str, Any]) -> None:
+    """In the JSON schema, also allow '{}': ISA-JSON writes a missing previous/next
+    process as an empty object, which 'empty_link_is_no_link' turns into None."""
+    schema["anyOf"].append({"type": "object", "maxProperties": 0})
+
+
 class Process(CommentedIsaBase):
     id: str = Field(alias="@id")
     date: str | None = None
@@ -136,13 +143,17 @@ class Process(CommentedIsaBase):
         list[IsaReference] | list[Source] | list[Sample] | list[Material] | list[Data]
     ) = Field(min_length=1)
     name: str
-    nextProcess: IsaReference | Process | None = None
+    nextProcess: IsaReference | Process | None = Field(
+        default=None, json_schema_extra=_allow_empty_link
+    )
     outputs: list[IsaReference] | list[Sample] | list[Material] | list[Data] = Field(
         min_length=1
     )
     parameterValues: list[ProcessParameterValue] = []
     performer: str | None = None
-    previousProcess: IsaReference | Process | None = None
+    previousProcess: IsaReference | Process | None = Field(
+        default=None, json_schema_extra=_allow_empty_link
+    )
 
     @field_validator("previousProcess", "nextProcess", mode="before")
     def empty_link_is_no_link(cls, v: object) -> object:
