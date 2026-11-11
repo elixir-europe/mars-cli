@@ -111,7 +111,7 @@ def resolve_isa_template() -> Path:
     if template_env:
         src = Path(template_env)
     else:
-        src = PROJECT_ROOT.parent / "MARS" / "test-data" / "biosamples-input-isa.json"
+        src = PROJECT_ROOT.parent / "MARS" / "test-data" / "ena-minimal.json"
 
     if not src.exists():
         raise FileNotFoundError(f"ISA template not found at {src}")
