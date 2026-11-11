@@ -82,13 +82,13 @@ class Sample(CommentedIsaBase):
 
 class ProtocolParameter(IsaBase):
     id: str | None = Field(alias="@id", default=None)
-    parameterName: OntologyAnnotation | None = None
+    parameterName: OntologyAnnotation | str | None = None
 
 
 class ProcessParameterValue(IsaBase):
     category: ProtocolParameter | None = None
     value: str | float | int | OntologyAnnotation | None = None
-    unit: OntologyAnnotation | list[OntologyAnnotation] | None = None
+    unit: OntologyAnnotation | None = None
 
 
 # Helper class for protocol -> components
