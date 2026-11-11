@@ -24,7 +24,8 @@ from mars_lib.models.repository_response import RepositoryResponse
 import json
 
 
-METABOLIGHTS_ISA = "MARS/test-data/metabolights-input-isa.json"
+ENA_MINIMAL_ISA = "MARS/test-data/ena-minimal.json"
+METABOLIGHTS_ISA = "MARS/test-data/metabolights-lcms.json"
 ENA_COMPLETE_ISA = "MARS/test-data/ena-complete.json"
 
 
@@ -43,9 +44,7 @@ def test_load_investigation():
     assert len(valid_investigation01.studies) == 1
     assert valid_investigation01.studies[0].identifier == "BH2024"
 
-    valid_investigation02 = load_investigation(
-        "MARS/test-data/biosamples-input-isa.json"
-    )
+    valid_investigation02 = load_investigation(ENA_MINIMAL_ISA)
     assert len(valid_investigation02.studies) == 1
     assert (
         valid_investigation02.studies[0].title
@@ -182,7 +181,7 @@ def test_target_repo_comment_validator():
 
 def test_update_study_materials_no_accession_categories():
     # This file has no characteristics for accessions
-    json_path = "MARS/test-data/biosamples-original-isa-no-accesion-char.json"
+    json_path = "MARS/test-data/ena-minimal-no-accession-category.json"
     with open(json_path) as json_file:
         json_data = json.load(json_file)
 
@@ -215,8 +214,8 @@ def test_update_study_materials_no_accession_categories():
 
 
 def test_update_study_materials_with_accession_categories():
-    # This file has no characteristics for accessions
-    json_path = "MARS/test-data/biosamples-original-isa.json"
+    # This file declares an accession characteristic category
+    json_path = ENA_MINIMAL_ISA
     with open(json_path) as json_file:
         json_data = json.load(json_file)
 
