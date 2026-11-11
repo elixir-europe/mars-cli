@@ -416,9 +416,11 @@ def create_accession_characteristic(
 
     updated_material = apply_filter(material_type_path.where, current_materials)
 
-    new_material_attribute_value = MaterialAttributeValue(
-        **{"@id": f"#material_attribute_value/accession_{accession_id}"},
-        category=category,
+    new_material_attribute_value = MaterialAttributeValue.model_validate(
+        {
+            "@id": f"#material_attribute_value/accession_{accession_id}",
+            "category": category,
+        }
     )
     updated_material.characteristics.append(new_material_attribute_value)
 

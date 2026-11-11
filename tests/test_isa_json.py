@@ -17,7 +17,9 @@ from mars_lib.models.isa_json import (
     Assay,
     Person,
     Investigation,
+    OntologySourceReference,
     Process,
+    Publication,
     Study,
     _is_valid_filename,
 )
@@ -869,6 +871,7 @@ def test_filename_validation_requires_filename(model):
     with pytest.raises(ValidationError, match="filename"):
         model.model_validate({**document, "filename": None})
 
+
 @pytest.mark.skip(
     reason="ARC ISA-JSON currently does not comply to the MARS specifications and needs upstream fixes."
 )
@@ -952,3 +955,22 @@ def test_invalid_test_data_is_rejected():
     with open("tests/fixtures/invalid_investigation.json", "r") as json_file:
         with pytest.raises(ValidationError):
             Investigation.model_validate(json.load(json_file))
+
+
+def test_assay_requires_target_repository_comment_even_without_comments_key():
+    # 'comments' is absent (not just empty): the mandatory 'target_repository'
+    # comment must still be enforced.
+    assay = minimal_assay()
+    del assay["comments"]
+    with pytest.raises(
+        ValidationError, match=f"'{TARGET_REPO_KEY}' comment is missing"
+    ):
+        Assay.model_validate(assay)
+
+
+def test_ontology_source_reference_and_publication_accept_an_id():
+    assert OntologySourceReference.model_validate({"@id": "#osr/1", "name": "EFO"}).id
+    assert Publication.model_validate({"@id": "#publication/1", "title": "t"}).id
+    # the '@id' of nested annotations was already supported
+    assert Publication.model_validate({"status": {"@id": "#status/1"}})
+    assert Person.model_validate({"roles": [{"@id": "#role/1"}]})

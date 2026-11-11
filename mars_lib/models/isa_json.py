@@ -33,6 +33,7 @@ class CommentedIsaBase(IsaBase):
 
 
 class OntologySourceReference(CommentedIsaBase):
+    id: str | None = Field(alias="@id", default=None)
     description: str | None = None
     file: str | None = None
     name: str | None = None
@@ -190,6 +191,9 @@ def _validate_filename(filename: str | None, prefix: str, arc_kind: str) -> str:
 
 class Assay(CommentedIsaBase):
     id: str = Field(alias="@id")
+    # The 'target_repository' comment is mandatory, so the comments are also
+    # validated when the key is absent (pydantic skips validators on defaults).
+    comments: list[Comment] = Field(default_factory=list, validate_default=True)
     characteristicCategories: list[MaterialAttribute] = Field(min_length=1)
     dataFiles: list[Data]
     filename: str
@@ -238,6 +242,7 @@ class Person(CommentedIsaBase):
 
 
 class Publication(CommentedIsaBase):
+    id: str | None = Field(alias="@id", default=None)
     authorList: str | None = None
     doi: str | None = None
     pubMedID: str | None = None
