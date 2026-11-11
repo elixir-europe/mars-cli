@@ -87,7 +87,7 @@ class Source(CommentedIsaBase):
 class Sample(CommentedIsaBase):
     id: str = Field(alias="@id")
     name: str
-    characteristics: list[MaterialAttributeValue] = Field(min_length=1)
+    characteristics: list[MaterialAttributeValue]
     factorValues: list[FactorValue] | None = None
     derivesFrom: list[IsaReference] = Field(min_length=1)
 
@@ -122,7 +122,7 @@ class Protocol(CommentedIsaBase):
 
 class Material(CommentedIsaBase):
     id: str = Field(alias="@id")
-    characteristics: list[MaterialAttributeValue] = Field(min_length=1)
+    characteristics: list[MaterialAttributeValue]
     name: str
     type: str | None = None
 
@@ -180,7 +180,7 @@ def _is_valid_filename(filename: str, prefix: str, arc_kind: str) -> bool:
 
 
 def _validate_filename(filename: str | None, prefix: str, arc_kind: str) -> str:
-    if filename is None or _is_valid_filename(filename, prefix, arc_kind):
+    if filename and _is_valid_filename(filename, prefix, arc_kind):
         return filename
     raise ValueError(
         f"'filename' should start with '{prefix}_' "
