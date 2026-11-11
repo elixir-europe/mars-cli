@@ -337,10 +337,11 @@ def create_accession_characteristic_category(
     if type(node) not in [Study, Assay]:
         raise ValueError("Node must be either 'Study' or 'Assay'.")
 
-    category = MaterialAttribute()
     accession_id = str(uuid.uuid4())
-    category.id = f"#characteristic_category/accession_{accession_id}"
-    category.characteristicType = OntologyAnnotation(annotationValue="accession")
+    category = MaterialAttribute(
+        **{"@id": f"#characteristic_category/accession_{accession_id}"},
+        characteristicType=OntologyAnnotation(annotationValue="accession"),
+    )
     node.characteristicCategories.append(category)
 
     return accession_id, category
@@ -415,11 +416,12 @@ def create_accession_characteristic(
 
     updated_material = apply_filter(material_type_path.where, current_materials)
 
-    new_material_attribute_value = MaterialAttributeValue()
-    new_material_attribute_value.id = (
-        f"#material_attribute_value/accession_{accession_id}"
+    new_material_attribute_value = MaterialAttributeValue.model_validate(
+        {
+            "@id": f"#material_attribute_value/accession_{accession_id}",
+            "category": category,
+        }
     )
-    new_material_attribute_value.category = category
     updated_material.characteristics.append(new_material_attribute_value)
 
 

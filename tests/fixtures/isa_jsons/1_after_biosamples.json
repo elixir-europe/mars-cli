@@ -122,10 +122,7 @@
           "materials": {
             "samples": [
               {
-                "comments": [],
-                "@id": "#sample/331",
-                "characteristics": [],
-                "derivesFrom": []
+                "@id": "#sample/331"
               }
             ],
             "otherMaterials": [
@@ -145,30 +142,14 @@
                   }
                 ],
                 "name": "extract 1",
-                "type": "library name",
-                "derivesFrom": [
-                  {
-                    "comments": [],
-                    "@id": "#sample/331",
-                    "characteristics": [],
-                    "derivesFrom": []
-                  }
-                ]
+                "type": "library name"
               },
               {
                 "comments": [],
                 "@id": "#other_material/333",
                 "characteristics": [],
                 "name": "library 1",
-                "type": "library name",
-                "derivesFrom": [
-                  {
-                    "comments": [],
-                    "@id": "#other_material/332",
-                    "characteristics": [],
-                    "derivesFrom": []
-                  }
-                ]
+                "type": "library name"
               }
             ]
           },
@@ -184,42 +165,26 @@
               "@id": "#process/nucleic_acid_extraction/332",
               "date": "",
               "executesProtocol": {
-                "comments": [],
-                "@id": "#protocol/19_18",
-                "components": [],
-                "parameters": []
+                "@id": "#protocol/19_18"
               },
               "inputs": [
                 {
-                  "comments": [],
-                  "@id": "#sample/331",
-                  "characteristics": []
+                  "@id": "#sample/331"
                 }
               ],
               "name": "",
               "nextProcess": {
-                "comments": [],
-                "@id": "#process/library_construction/333",
-                "inputs": [],
-                "outputs": [],
-                "parameterValues": []
+                "@id": "#process/library_construction/333"
               },
               "outputs": [
                 {
-                  "comments": [],
-                  "@id": "#other_material/332",
-                  "characteristics": [],
-                  "derivesFrom": []
+                  "@id": "#other_material/332"
                 }
               ],
               "parameterValues": [],
               "performer": "",
               "previousProcess": {
-                "comments": [],
-                "@id": "#process/sample_collection/331",
-                "inputs": [],
-                "outputs": [],
-                "parameterValues": []
+                "@id": "#process/sample_collection/331"
               }
             },
             {
@@ -227,32 +192,20 @@
               "@id": "#process/library_construction/333",
               "date": "",
               "executesProtocol": {
-                "comments": [],
-                "@id": "#protocol/20_20",
-                "components": [],
-                "parameters": []
+                "@id": "#protocol/20_20"
               },
               "inputs": [
                 {
-                  "comments": [],
-                  "@id": "#other_material/332",
-                  "characteristics": []
+                  "@id": "#other_material/332"
                 }
               ],
               "name": "",
               "nextProcess": {
-                "comments": [],
-                "@id": "#process/nucleic_acid_sequencing/334",
-                "inputs": [],
-                "outputs": [],
-                "parameterValues": []
+                "@id": "#process/nucleic_acid_sequencing/334"
               },
               "outputs": [
                 {
-                  "comments": [],
-                  "@id": "#other_material/333",
-                  "characteristics": [],
-                  "derivesFrom": []
+                  "@id": "#other_material/333"
                 }
               ],
               "parameterValues": [
@@ -346,11 +299,7 @@
               ],
               "performer": "",
               "previousProcess": {
-                "comments": [],
-                "@id": "#process/nucleic_acid_extraction/332",
-                "inputs": [],
-                "outputs": [],
-                "parameterValues": []
+                "@id": "#process/nucleic_acid_extraction/332"
               }
             },
             {
@@ -358,31 +307,18 @@
               "@id": "#process/nucleic_acid_sequencing/334",
               "date": "",
               "executesProtocol": {
-                "comments": [],
-                "@id": "#protocol/21_21",
-                "components": [],
-                "parameters": []
+                "@id": "#protocol/21_21"
               },
               "inputs": [
                 {
-                  "comments": [],
-                  "@id": "#other_material/333",
-                  "characteristics": []
+                  "@id": "#other_material/333"
                 }
               ],
               "name": "",
-              "nextProcess": {
-                "comments": [],
-                "inputs": [],
-                "outputs": [],
-                "parameterValues": []
-              },
+              "nextProcess": {},
               "outputs": [
                 {
-                  "comments": [],
-                  "@id": "#data_file/334",
-                  "characteristics": [],
-                  "derivesFrom": []
+                  "@id": "#data_file/334"
                 }
               ],
               "parameterValues": [
@@ -405,11 +341,7 @@
               ],
               "performer": "",
               "previousProcess": {
-                "comments": [],
-                "@id": "#process/library_construction/333",
-                "inputs": [],
-                "outputs": [],
-                "parameterValues": []
+                "@id": "#process/library_construction/333"
               }
             }
           ],
@@ -796,9 +728,7 @@
             "factorValues": [],
             "derivesFrom": [
               {
-                "comments": [],
-                "@id": "#source/330",
-                "characteristics": []
+                "@id": "#source/330"
               }
             ]
           }
@@ -839,31 +769,18 @@
           "@id": "#process/sample_collection/331",
           "date": "",
           "executesProtocol": {
-            "comments": [],
-            "@id": "#protocol/18_10",
-            "components": [],
-            "parameters": []
+            "@id": "#protocol/18_10"
           },
           "inputs": [
             {
-              "comments": [],
-              "@id": "#source/330",
-              "characteristics": []
+              "@id": "#source/330"
             }
           ],
           "name": "",
-          "nextProcess": {
-            "comments": [],
-            "inputs": [],
-            "outputs": [],
-            "parameterValues": []
-          },
+          "nextProcess": {},
           "outputs": [
             {
-              "comments": [],
-              "@id": "#sample/331",
-              "characteristics": [],
-              "derivesFrom": []
+              "@id": "#sample/331"
             }
           ],
           "parameterValues": [
@@ -899,12 +816,7 @@
             }
           ],
           "performer": "",
-          "previousProcess": {
-            "comments": [],
-            "inputs": [],
-            "outputs": [],
-            "parameterValues": []
-          }
+          "previousProcess": {}
         }
       ],
       "protocols": [
