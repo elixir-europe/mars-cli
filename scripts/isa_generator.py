@@ -31,11 +31,11 @@ def _add_suffix_before_extension(file_name: str, suffix: str) -> str:
     for compound_extension in (".fastq.gz", ".fq.gz"):
         if lower_name.endswith(compound_extension):
             extension = file_name[-len(compound_extension) :]
-            return f"{file_name[:-len(compound_extension)]}_{suffix}{extension}"
+            return f"{file_name[: -len(compound_extension)]}_{suffix}{extension}"
 
     extension = Path(file_name).suffix
     if extension:
-        return f"{file_name[:-len(extension)]}_{suffix}{extension}"
+        return f"{file_name[: -len(extension)]}_{suffix}{extension}"
     return f"{file_name}_{suffix}"
 
 

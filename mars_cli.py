@@ -75,13 +75,6 @@ def cli(ctx, development):
     "--metabolights-username",
     type=click.STRING,
     help="Username for MetaboLights metadata submission",
-    envvar="METABOLIGHTS_USERNAME",
-)
-@click.option(
-    "--metabolights-ftp-username",
-    type=click.STRING,
-    help="Username for MetaboLights data submission",
-    envvar="METABOLIGHTS_FTP_USERNAME",
 )
 @click.option(
     "--credentials-file",
@@ -126,7 +119,6 @@ def submit(
     ctx,
     webin_username,
     metabolights_username,
-    metabolights_ftp_username,
     credentials_file,
     isa_json_file,
     submit_to_biosamples,
@@ -156,17 +148,21 @@ def submit(
 
     data_file_paths = [f.name for f in data_files] if file_transfer else []
 
+    is_development = ctx.obj.get("DEVELOPMENT")
+    if is_development is None:
+        is_development = os.getenv("MARS_DEBUG") in ["1", 1]
     submission(
         webin_username,
         metabolights_username,
-        metabolights_ftp_username,
         credentials_file,
         isa_json_file.name,
         target_repositories,
         urls_dict,
         file_transfer,
         output,
-        data_file_paths,
+        data_file_paths=data_file_paths,
+        config=config,
+        is_development=is_development,
     )
 
 
@@ -226,9 +222,7 @@ def validate_investigation(isa_json_file):
 @cli.command()
 @click.option(
     "--auth-provider",
-    type=click.Choice(
-        ["webin", "metabolights_metadata", "metabolights_data"], case_sensitive=False
-    ),
+    type=click.Choice(["webin", "metabolights"], case_sensitive=False),
     is_flag=False,
     flag_value="value",
     required=True,

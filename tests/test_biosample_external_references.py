@@ -46,7 +46,7 @@ _POC_CONFIG.read_dict(
 )
 DEV_URLS = TargetRepository.get_repository_urls_from_config(_POC_CONFIG)["DEV"]
 ENA_STUDY_PAGE = "https://wwwdev.ebi.ac.uk/ena/browser/view/"
-MTBLS_STUDY_PAGE = "https://www-test.ebi.ac.uk/metabolights/"
+MTBLS_STUDY_PAGE = "https://wwwdev.ebi.ac.uk/metabolights/"
 # Sample 'leaf 1', the one used in the ENA assay of the fixture below
 LEAF_ACCESSION = "SAMEA131504584"
 

@@ -2,6 +2,10 @@ import json
 from typing import Any
 
 from mars_lib.logging import print_and_log
+from mars_lib.models.abstract_repository_client import (
+    SUBMISSION_ID_KEY,
+    InitiationResponse,
+)
 from mars_lib.models.isa_json import (
     Investigation,
     Assay,
@@ -423,6 +427,62 @@ def create_accession_characteristic(
     updated_material.characteristics.append(new_material_attribute_value)
 
 
+def find_submission_id_comment_value(investigation: Investigation) -> None | str:
+    for study in investigation.studies or []:
+        for assay in study.assays or []:
+            submission_id_comments = [
+                x for x in assay.comments or [] if x.name == SUBMISSION_ID_KEY
+            ]
+            if submission_id_comments:
+                return submission_id_comments[0].value
+    return None
+
+
+def update_initiation_comments(
+    investigation: Investigation,
+    repository_name: str,
+    initiation_response: InitiationResponse,
+) -> Investigation:
+    for study in investigation.studies or []:
+        for item in study.assays or []:
+            assay: Assay = item
+            repository_comments = [
+                x for x in assay.comments or [] if x.name == TARGET_REPO_KEY
+            ]
+            if (
+                not repository_comments
+                or repository_comments[0].value != repository_name
+            ):
+                continue
+
+            drop_comments = []
+            if initiation_response.submission_id:
+                drop_comments.append(SUBMISSION_ID_KEY)
+            for item in initiation_response.assay_comments or []:
+                drop_comments.append(item)
+
+            new_comments = []
+            if initiation_response.submission_id:
+                new_comments.append(
+                    Comment(
+                        name=SUBMISSION_ID_KEY, value=initiation_response.submission_id
+                    )
+                )
+
+            for item in initiation_response.assay_comments or []:
+                new_comments.append(
+                    Comment(
+                        name=item,
+                        value=initiation_response.assay_comments[item] or "",
+                    )
+                )
+
+            new_comments.extend(
+                [x for x in assay.comments or [] if x.name not in drop_comments]
+            )
+            assay.comments = new_comments
+
+
 def update_investigation(
     investigation: Investigation, repo_response: RepositoryResponse
 ) -> Investigation:
@@ -439,7 +499,6 @@ def update_investigation(
     # TODO: Modify to include datafile related accessions as well. E.G: ENA's run accessions.
     target_repository = repo_response.target_repository
     for accession in repo_response.accessions:
-
         has_assay_in_path = len([p for p in accession.path if p.key == "assays"]) > 0
         has_materials_in_path = (
             len([p for p in accession.path if p.key == "materials"]) > 0

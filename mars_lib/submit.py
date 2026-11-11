@@ -1,4 +1,4 @@
-import io
+from configparser import ConfigParser
 import os
 from datetime import datetime
 from io import TextIOWrapper
@@ -7,7 +7,6 @@ import requests
 import json
 from typing import Any
 from mars_lib.authentication import (
-    get_metabolights_auth_token,
     get_webin_auth_token,
     load_credentials,
     AuthProvider,
@@ -22,13 +21,25 @@ from mars_lib.biosamples_external_references import (
 )
 from mars_lib.credential import CredentialManager
 from mars_lib.isa_json import (
+    find_submission_id_comment_value,
     load_investigation,
     reduce_investigation_for_target_repo,
+    update_initiation_comments,
     update_investigation,
     map_data_files_to_repositories,
 )
-from mars_lib.models.isa_json import Comment, Investigation
+from mars_lib.models.abstract_repository_client import (
+    DataFileTransferConfig,
+    DataTransferProtocol,
+    RepositoryClientError,
+    SubmissionContext,
+    TooEarlyError,
+)
+from mars_lib.models.isa_json import Investigation
 from mars_lib.models.repository_response import RepositoryResponse
+from mars_lib.repositories.metabolights_client import (
+    MetaboLightsRepositoryClient,
+)
 from mars_lib.target_repo import TargetRepository
 from mars_lib.logging import print_and_log
 from pydantic import ValidationError
@@ -45,26 +56,27 @@ def save_step_to_file(time_stamp: float, filename: str, investigation: Investiga
         f.write(investigation.model_dump_json(by_alias=True, exclude_none=True))
 
 
-DEBUG = os.getenv("MARS_DEBUG") in ["1", 1]
-
-
 def submission(
     webin_username: str,
     metabolights_username: str,
-    metabolights_ftp_username: str,
     credentials_file: TextIOWrapper,
     isa_json_file: str,
     target_repositories: list[str],
     urls: dict[str, Any],
     file_transfer: str,
     output: str,
+    config: ConfigParser,
     data_file_paths: list[TextIOWrapper] = [],
+    is_development: bool = False,
+    submission_retry_period_in_seconds: int = 10,
+    submission_max_retry: int = 10,
 ) -> None:
     # If credential manager info found:
     # Get password from the credential manager
     # Else:
     # read credentials from file
-    if all([webin_username, metabolights_username, metabolights_ftp_username]):
+    user_credentials = {}
+    if all([webin_username, metabolights_username]):
         user_credentials = {
             cred_pair[0]: {
                 "username": cred_pair[1],
@@ -74,7 +86,7 @@ def submission(
             }
             for cred_pair in zip(
                 AuthProvider.available_providers(),
-                [webin_username, metabolights_username, metabolights_ftp_username],
+                [webin_username, metabolights_username],
             )
         }
     else:
@@ -93,12 +105,12 @@ def submission(
 
     # create data file map
     data_file_map = map_data_files_to_repositories(
-        files=[str(dfp) for dfp in data_file_paths], investigation=investigation
+        files=[str(dfp) for dfp in data_file_paths or []], investigation=investigation
     )
 
     time_stamp = datetime.timestamp(datetime.now())
 
-    if DEBUG:
+    if is_development:
         save_step_to_file(time_stamp, "0_Initial_ISA_JSON_in_model", investigation)
 
     if all(
@@ -124,7 +136,7 @@ def submission(
             json.loads(biosamples_result.content)
         )
         investigation = update_investigation(investigation, bs_mars_receipt)
-        if DEBUG:
+        if is_development:
             save_step_to_file(time_stamp, "1_after_biosamples", investigation)
 
     if TargetRepository.ENA.value in target_repositories:
@@ -132,7 +144,7 @@ def submission(
         if data_file_paths and file_transfer:
             upload_to_ena(
                 file_paths=[
-                    Path(df) for df in data_file_map[TargetRepository.ENA.value]
+                    Path(df) for df in data_file_map.get(TargetRepository.ENA.value, [])
                 ],
                 user_credentials=user_credentials[AuthProvider.WEBIN.value],
                 submission_url=urls["ENA"]["DATA-SUBMISSION"],
@@ -160,38 +172,128 @@ def submission(
             json.loads(ena_result.content)
         )
         investigation = update_investigation(investigation, ena_mars_receipt)
-        if DEBUG:
+        if is_development:
             save_step_to_file(time_stamp, "2_after_ena", investigation)
 
     if TargetRepository.METABOLIGHTS.value in target_repositories:
-        # Submit to MetaboLights
-        metabolights_result = upload_to_metabolights(
-            file_paths=data_file_map[TargetRepository.METABOLIGHTS.value],
-            file_transfer=file_transfer,
-            investigation=investigation,
-            metabolights_credentials=user_credentials[
-                AuthProvider.METABOLIGHTS_METADATA.value
-            ],
-            metabolights_url=urls["METABOLIGHTS"]["SUBMISSION"],
-            metabolights_token_url=urls["METABOLIGHTS"]["TOKEN"],
-        )
-        metabolights_receipt_obj = metabolights_result.json()
-        print_and_log(
-            f"Submission to {TargetRepository.METABOLIGHTS.value} was successful. Result:\n{metabolights_receipt_obj}",
-            level="info",
-        )
-        metabolights_receipt = RepositoryResponse.model_validate(
-            metabolights_receipt_obj
-        )
-        # TODO: MetaboLights creates accession number with errors. Errors are not handled.
-        investigation.studies[0].comments.append(
-            Comment(
-                name="metabolights_accession",
-                value=metabolights_receipt.accessions[0].value,
+        ################################################################################
+        # 0 - Get / create repository adaptor
+        ################################################################################
+        repository_client = MetaboLightsRepositoryClient()
+
+        repository_name = repository_client.repository_name
+        try:
+            ################################################################################
+            # 1 - Prepare input context for repository adaptor
+            #     repository configuration, filtered investigation, submission id, etc.
+            ################################################################################
+            filtered_investigation = repository_client.reduce_investigation(
+                input_investigation=investigation
             )
-        )
-        if DEBUG:
-            save_step_to_file(time_stamp, "3_after_metabolights", investigation)
+            repository_config = repository_client.get_repository_config(
+                config=config,
+                credentials=user_credentials,
+                is_development=is_development,
+            )
+            submission_id = find_submission_id_comment_value(filtered_investigation)
+
+            context = SubmissionContext(
+                submission_id=submission_id,
+                is_development=is_development,
+                repository_config=repository_config,
+                filtered_investigation=filtered_investigation,
+                submission_retry_period_in_seconds=submission_retry_period_in_seconds,
+                submission_max_retry=submission_max_retry,
+                data_file_transfer_config=None,
+            )
+
+            ################################################################################
+            # 2- Get repository token
+            ################################################################################
+            repository_token = repository_client.get_token(context)
+
+            ################################################################################
+            # 3- Initiate submission. Update assay comments in investigation and
+            #    FTP credentials in the context
+            ################################################################################
+            initiation_response = repository_client.initiate_submission(
+                context, repository_token=repository_token
+            )
+
+            if initiation_response:
+                # Update assay comments in input and filtered investigations
+                update_initiation_comments(
+                    investigation=investigation,
+                    repository_name=repository_name,
+                    initiation_response=initiation_response,
+                )
+                update_initiation_comments(
+                    investigation=context.filtered_investigation,
+                    repository_name=repository_name,
+                    initiation_response=initiation_response,
+                )
+                # Update FTP configuration
+                if initiation_response.ftp_credentials:
+                    repository_data_files = data_file_map.get(repository_name)
+                    data_files_root_path = None
+                    if repository_data_files:
+                        data_file_parents = [
+                            str(Path(data_file).parent)
+                            for data_file in repository_data_files
+                        ]
+                        if len(set(data_file_parents)) > 1:
+                            data_files_root_path = os.path.commonpath(data_file_parents)
+                    context.data_file_transfer_config = DataFileTransferConfig(
+                        transfer_protocol=DataTransferProtocol(file_transfer),
+                        credentials=initiation_response.ftp_credentials,
+                        # data_file_paths=repository_data_files,
+                        data_files_root_path=data_files_root_path,
+                    )
+            ################################################################################
+            # 4- Upload data files
+            ################################################################################
+
+            ################################################################################
+            # 5- Submit ISA-JSON with async way, if there is not receipt adaptor will raise
+            #    TooEarlyError
+            ################################################################################
+            mars_receipt = None
+            for _ in range(context.submission_max_retry):
+                try:
+                    mars_receipt = repository_client.upload_isa_json(
+                        context, repository_token=repository_token
+                    )
+                    break
+                except TooEarlyError:
+                    pass
+                time.sleep(context.submission_retry_period_in_seconds)
+
+            ################################################################################
+            # 6- Evaluate receipt and update investigation (if it is successful)
+            ################################################################################
+            if not mars_receipt:
+                print_and_log(
+                    f"Submission to {repository_name} is failed.", level="error"
+                )
+            elif not mars_receipt.errors and mars_receipt.accessions:
+                investigation = update_investigation(investigation, mars_receipt)
+                print_and_log(
+                    f"Submission to {repository_name} is successful.", level="info"
+                )
+                if is_development:
+                    save_step_to_file(time_stamp, "3_after_metabolights", investigation)
+            else:
+                print_and_log(f"Submission to {repository_name} failed.", level="error")
+                for error in mars_receipt.errors or []:
+                    print_and_log(
+                        f"{error.type}: {error.path}, {error.message}", level="error"
+                    )
+        except RepositoryClientError as err:
+            print_and_log(
+                f"Repository client error for {repository_name} submission. "
+                f"{type(err)}: {err.args}",
+                level="error",
+            )
 
     if TargetRepository.EVA.value in target_repositories:
         # Submit to EVA
@@ -252,111 +354,6 @@ def submit_to_biosamples(
     raise requests.HTTPError(
         f"Request towards BioSamples failed!\nRequest:\nMethod:{result.request.method}\nStatus:{result.status_code}\nURL:{result.request.url}\nHeaders:{result.request.headers}\nBody:{body}"
     )
-
-
-def upload_to_metabolights(
-    file_paths: list[str],
-    investigation: Investigation,
-    metabolights_credentials: dict[str, str],
-    metabolights_url: str,
-    metabolights_token_url: str,
-    file_transfer: str = "ftp",
-):
-    data_upload_protocol = (
-        "ftp" if not file_transfer or file_transfer.lower() == "ftp" else ""
-    )
-
-    if not data_upload_protocol == "ftp":
-        raise ValueError(
-            f"Data upload protocol {data_upload_protocol} is not supported"
-        )
-
-    token = get_metabolights_auth_token(
-        metabolights_credentials, auth_url=metabolights_token_url
-    )
-    headers = {
-        "accept": "application/json",
-        "Authorization": f"Bearer {token}",
-    }
-    investigation_str = reduce_investigation_for_target_repo(
-        investigation, TargetRepository.METABOLIGHTS
-    ).model_dump_json(by_alias=True, exclude_none=True)
-    json_file = io.StringIO(investigation_str)
-
-    files = {"isa_json_file": ("isa_json.json", json_file)}
-    result = None
-    try:
-        submission_response = requests.post(
-            metabolights_url,
-            headers=headers,
-            files=files,
-            timeout=120,
-        )
-        submission_response.raise_for_status()
-        if submission_response.json().get("errors", []):
-            response_body = submission_response.request.body
-            if isinstance(response_body, bytes):
-                response_body = response_body.decode("utf-8")
-            raise requests.HTTPError(
-                f"Request towards MetaboLights failed!\nRequest:\nMethod:{submission_response.request.method}\nStatus:{submission_response.status_code}\nURL:{submission_response.request.url}\nHeaders:{submission_response.request.headers}\nBody:{response_body}"
-            )
-
-        result = submission_response.json()
-    except Exception as exc:
-        raise exc
-
-    validation_url = find_value_in_info_section("validation-url", result["info"])
-    validation_status_url = find_value_in_info_section(
-        "validation-status-url", result["info"]
-    )
-    ftp_credentials_url = find_value_in_info_section(
-        "ftp-credentials-url", result["info"]
-    )
-
-    if file_transfer == "ftp":
-        ftp_credentials_response = requests.get(ftp_credentials_url, headers=headers)
-        ftp_credentials_response.raise_for_status()
-        ftp_credentials = ftp_credentials_response.json()
-        ftp_base_path = ftp_credentials["ftpPath"]  # noqa F841
-        uploader = FTPUploader(  # noqa F841
-            ftp_credentials["ftpHost"],
-            ftp_credentials["ftpUser"],
-            ftp_credentials["ftpPassword"],
-        )
-        # TODO: Update after the uploader is implemented/tested
-        # uploader.upload(file_paths, target_location=ftp_base_path)
-
-    validation_response = requests.post(validation_url, headers=headers)
-    validation_response.raise_for_status()
-    pool_time_in_seconds = 10
-    max_pool_count = 100
-    validation_status_response = None
-    for _ in range(max_pool_count):
-        timeout = False
-        try:
-            validation_status_response = requests.get(
-                validation_status_url, headers=headers, timeout=30
-            )
-            validation_status_response.raise_for_status()
-        except requests.exceptions.Timeout:
-            timeout = True
-        if not timeout:
-            if validation_status_response is None:
-                raise ValueError("Validation status response is None")
-            validation_status = validation_status_response.json()
-            validation_time = find_value_in_info_section(
-                "validation-time", validation_status["info"], fail_gracefully=True
-            )
-            if validation_time:
-                break
-        time.sleep(pool_time_in_seconds)
-    else:
-        raise ValueError(f"Validation failed after {max_pool_count} iterations")
-
-    if validation_status_response:
-        return validation_status_response
-
-    raise ValueError("Submission failed for MetaboLights")
 
 
 def find_value_in_info_section(
