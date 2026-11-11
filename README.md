@@ -317,23 +317,12 @@ mars-cli submit --output final_isa my-credentials my-isa-json.json
 
 ## Feature: Check data files against the ISA JSON
 
-Before submitting, you can check whether every data file referenced in the ISA-JSON is present in the folder(s) you
-pass to the CLI. Files are matched on their file name, the same way `submit` does it.
+Check that every data file in the ISA-JSON is present in the data folder(s), without submitting anything. Files are
+matched on file name, folders are searched recursively and `--data-folder` can be passed multiple times.
 
 ```sh
 mars-cli check-data-files --data-folder ../data my-isa-json.json
 ```
-
-Use `--data-folder` multiple times to pass more than one folder. Each folder is searched recursively.
-
-The same check runs automatically at the start of `submit`: the report is logged, and the submission is aborted before
-anything is sent to a target repository if a data file referenced in the ISA-JSON is missing.
-
-The command reports:
-
-- how many data files could be matched to a data file in the ISA-JSON,
-- how many data files are not referenced in the ISA-JSON (these are skipped during submission),
-- how many data files in the ISA-JSON could not be matched to a data file passed through the CLI.
 
 ```
 Data file check for ISA JSON with investigation 'My investigation':
@@ -344,11 +333,9 @@ Not referenced in the ISA JSON: ../data/not-in-isa.fastq
 Missing data file: rna-seq-data-3.fastq
 ```
 
-Like all other output of the CLI, the report is written through the logger. Unreferenced files are logged as
-warnings and missing data files as errors. The counts are logged at INFO level, which is the default `log_level`.
-
-The command exits with a non-zero status when any data file in the ISA-JSON has no match, so it can be used as a gate
-in scripts and CI.
+Unreferenced files are logged as warnings and skipped during submission. Missing files are logged as errors and make
+the command exit with a non-zero status. `submit` runs the same check first and stops before anything is sent if a
+file is missing. The counts are logged at `INFO`, so they only show if your `log_level` is `INFO` or lower.
 
 ## Feature:  Extending BioSamples' records
 
