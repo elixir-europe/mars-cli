@@ -28,6 +28,7 @@ from mars_lib.models.isa_json import (
 )
 from mars_lib.models.repository_response import RepositoryResponse
 import json
+from pathlib import Path
 
 
 ENA_MINIMAL_ISA = "MARS/test-data/ena-minimal.json"
@@ -945,17 +946,59 @@ def test_map_data_files_to_repositories():
     map_data_files_to_repositories(duplicated_files, investigation)
 
 
+# Test data that does not comply with the strict MARS model (yet). strict=True:
+# once a file complies, its test fails so the entry gets removed.
+NON_COMPLIANT_TEST_FILES = {
+    "MARS/test-data/ARC-ISA-example.json": (
+        "ARC ISA-JSON currently does not comply to the MARS specifications "
+        "and needs upstream fixes."
+    ),
+    "MARS/test-data/ISA-PTX-TEST/isajson/i_investigation_PTX_Pilot_Daphnia_magna-3-assays.json": (
+        "PTX ISA-JSON does not comply to the MARS specifications yet, "
+        "e.g. an assay without samples."
+    ),
+}
+
+
+def _isa_json_test_files():
+    """Every ISA JSON in MARS/test-data, so new files are picked up automatically,
+    plus the fixture the tests load as an Investigation."""
+    files = sorted(
+        path.as_posix()
+        for path in Path("MARS/test-data").rglob("*.json")
+        if "receipt" not in path.name
+    )
+    files.append("tests/fixtures/isa_jsons/1_after_biosamples.json")
+    return [
+        (
+            pytest.param(
+                file,
+                marks=pytest.mark.xfail(
+                    reason=NON_COMPLIANT_TEST_FILES[file], strict=True
+                ),
+            )
+            if file in NON_COMPLIANT_TEST_FILES
+            else file
+        )
+        for file in files
+    ]
+
+
 # ISA JSON files that the tests (and thus the CI workflow) load as an Investigation.
 # They all have to comply with the strict MARS model.
-ISA_JSON_TEST_FILES = [
-    "MARS/test-data/biosamples-input-isa.json",
-    "MARS/test-data/biosamples-original-isa.json",
-    "MARS/test-data/biosamples-original-isa-no-accesion-char.json",
-    "MARS/test-data/ena-complete.json",
-    "MARS/test-data/metabolights-input-isa.json",
-    "MARS/test-data/HoloFoodinISA_v1.0.json",
-    "tests/fixtures/isa_jsons/1_after_biosamples.json",
-]
+ISA_JSON_TEST_FILES = _isa_json_test_files()
+
+
+# The MARS receipts the repository services write; ena-receipt*.json are raw ENA
+# receipts, not MARS receipts.
+@pytest.mark.parametrize(
+    "file_path",
+    sorted(
+        path.as_posix() for path in Path("MARS/test-data").glob("mars-*receipt*.json")
+    ),
+)
+def test_mars_receipt_parses(file_path):
+    RepositoryResponse.from_json_file(file_path)
 
 
 @pytest.mark.parametrize("file_path", ISA_JSON_TEST_FILES)
