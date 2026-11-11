@@ -339,25 +339,25 @@ To summarize, the steps of the code are:
 After configuring the `settings.ini` file, you can run the MARS CLI tool to submit the isa-json:
 
 ```bash
-python mars_cli.py --development submit --submit-to-metabolights False --submit-to-ena False --credential-service-name <biosamples> --username-credentials <username> ../test-data/biosamples-input-isa.json
+python mars_cli.py --development submit --submit-to-metabolights False --submit-to-ena False --credential-service-name <biosamples> --username-credentials <username> MARS/test-data/ena-minimal.json
 ```
 
 - Replace `<biosamples>` with the appropriate service name.
 - Replace `<username>` with your BioSamples username.
-- Adjust the submission file path (`../test-data/biosamples-input-isa.json`) as needed.
+- Adjust the submission file path (`MARS/test-data/ena-minimal.json`) as needed.
 
-Aternatively, you can also use a credentials file to authenticate to the services. An example can be found here: https://github.com/elixir-europe/MARS/blob/main/mars-cli/tests/test_credentials_example.json
+Alternatively, you can also use a credentials file to authenticate to the services. An example can be found here: https://github.com/elixir-europe/mars-cli/blob/main/tests/test_credentials_example.json
 	
 Run the MARS CLI tool to submit the isa-json using credentials file:
 	
 ```bash
-python mars_cli.py --development submit --submit-to-metabolights False --submit-to-ena False --credentials-file <path_to_your_credentials_file.json> ../test-data/biosamples-input-isa.json
+python mars_cli.py --development submit --submit-to-metabolights False --submit-to-ena False --credentials-file <path_to_your_credentials_file.json> MARS/test-data/ena-minimal.json
 ```
 
 ### Submit data files and isa-json and to biosamples and ENA
 
 ```bash
-python mars_cli.py --credential-service-name biosamples  --username-credentials <username> --file-transfer ftp --data-files ../data/ENA_data.R1.fastq.gz --submit-to-metabolights False --output final-isa ../data/biosamples-input-isa.json
+python mars_cli.py --credential-service-name biosamples  --username-credentials <username> --file-transfer ftp --data-files ../data/ENA_data.R1.fastq.gz --submit-to-metabolights False --output final-isa ../data/ena-minimal.json
 ```
 
 ### Submit data files and isa-json to Metabolights
@@ -365,7 +365,7 @@ python mars_cli.py --credential-service-name biosamples  --username-credentials 
 Work in progress, currently data transfer is not supported yet.
 
 ```bash
-python mars_cli.py --credential-service-name metabolights  --username-credentials <username> --file-transfer ftp --data-files ../data/metpro-analysis.txt <additional *.mzml data files> --submit-to-biosamples False --submit-to-ena False --output final-isa ../data/metabolights-input-isa.json
+python mars_cli.py --credential-service-name metabolights  --username-credentials <username> --file-transfer ftp --data-files ../data/metpro-analysis.txt <additional *.mzml data files> --submit-to-biosamples False --submit-to-ena False --output final-isa ../data/metabolights-lcms.json
 ```
 
 ## Deploy repository services
