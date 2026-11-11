@@ -17,6 +17,9 @@ from mars_lib.models.isa_json import (
     Assay,
     Person,
     Investigation,
+    MaterialAttribute,
+    MaterialAttributeValue,
+    OntologyAnnotation,
     OntologySourceReference,
     Process,
     Publication,
@@ -949,6 +952,68 @@ ISA_JSON_TEST_FILES = [
 def test_test_data_complies_with_model(file_path):
     with open(file_path, "r") as json_file:
         assert Investigation.model_validate(json.load(json_file))
+
+
+def _contains_none(obj) -> bool:
+    if obj is None:
+        return True
+    if isinstance(obj, dict):
+        return any(_contains_none(v) for v in obj.values())
+    if isinstance(obj, list):
+        return any(_contains_none(v) for v in obj)
+    return False
+
+
+@pytest.mark.parametrize("file_path", ISA_JSON_TEST_FILES)
+def test_serialization_with_exclude_none_drops_all_none_values(file_path):
+    investigation = load_investigation(file_path)
+
+    as_dict = investigation.model_dump(by_alias=True, exclude_none=True)
+    as_json = json.loads(investigation.model_dump_json(by_alias=True, exclude_none=True))
+
+    assert not _contains_none(as_dict)
+    assert not _contains_none(as_json)
+    # Dropping the None values must not lose information
+    assert Investigation.model_validate(as_dict) == investigation
+
+
+def test_serialization_drops_optional_fields_that_are_none():
+    attribute = MaterialAttribute.model_validate({"@id": "#attr/1"})
+    value = MaterialAttributeValue.model_validate(
+        {"@id": None, "category": {"@id": "#attr/1"}, "value": None, "unit": None}
+    )
+
+    # Without the flag the optional fields are serialized as null
+    assert value.model_dump(by_alias=True)["@id"] is None
+    assert value.model_dump(by_alias=True)["category"]["characteristicType"] is None
+
+    dumped = value.model_dump(by_alias=True, exclude_none=True)
+    assert dumped["category"] == attribute.model_dump(by_alias=True, exclude_none=True)
+    for key in ("@id", "value", "unit"):
+        assert key not in dumped
+    assert "characteristicType" not in dumped["category"]
+    assert not _contains_none(dumped)
+
+
+def test_serialization_drops_values_set_to_none_after_validation():
+    value = MaterialAttributeValue.model_validate(
+        {
+            "@id": "#value/1",
+            "category": {"@id": "#attr/1"},
+            "value": {"@id": "#ann/1", "annotationValue": "x"},
+            "unit": {"@id": "#unit/1"},
+        }
+    )
+    value.id = None
+    value.unit = None
+    value.value = OntologyAnnotation.model_validate({"annotationValue": None})
+
+    dumped = value.model_dump(by_alias=True, exclude_none=True)
+
+    assert not _contains_none(dumped)
+    assert "@id" not in dumped
+    assert "unit" not in dumped
+    assert "annotationValue" not in dumped["value"]
 
 
 def test_invalid_test_data_is_rejected():
