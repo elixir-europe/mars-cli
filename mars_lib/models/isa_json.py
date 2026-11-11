@@ -99,7 +99,7 @@ class ProtocolParameter(IsaBase):
 
 
 class ProcessParameterValue(IsaBase):
-    category: IsaReference
+    category: ProtocolParameter | IsaReference
     value: str | float | int | OntologyAnnotation | None = None
     unit: OntologyAnnotation | None = None
 
@@ -153,7 +153,7 @@ class Process(CommentedIsaBase):
 
 # Helper for assay -> materials
 class AssayMaterialType(IsaBase):
-    samples: list[IsaReference] = Field(min_length=1)
+    samples: list[IsaReference] | list[Sample] = Field(min_length=1)
     otherMaterials: list[Material] = []
 
 
