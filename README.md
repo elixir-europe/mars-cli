@@ -291,9 +291,9 @@ mars-cli submit --submit-to-ena False my-credentials my-isa-json.json
 
 `--file-transfer`: Provide the name of a file transfer solution, like ftp or aspera
 
-`--data-file`: Paths of files to upload.
+`--data-folder`: Path to a folder holding the files to upload. All files in the folder (recursively) are included. Can be passed multiple times. Only folders are accepted, not individual files.
 
-> **Note**: Following command line will submit isa-file and data-file using FTP solution to Biosamples and  ENA:
+> **Note**: Following command line will submit isa-file and data files using FTP solution to Biosamples and  ENA:
 ```sh
 mars-cli submit --submit-to-metabolights False --file-transfer ftp --data-folder ../data my-credentials my-isa-json.json
 ```
