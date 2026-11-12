@@ -45,6 +45,9 @@ class RepositoryResponse(BaseModel):
     accessions: list[Accession] = []
     errors: list[Error] = []
     info: list[Info] = []
+    submission_status: None | str = None
+    task_id: None | str = None
+    submission_id: None | str = None
 
     @field_validator("target_repository")
     def validate_target_repository(cls, v: str) -> str:

@@ -46,15 +46,13 @@ def create_settings_file(settings_dir):
     }
     config["metabolights"] = {
         "production-url": "https://www.ebi.ac.uk/metabolights/ws3/version",
-        "production-submission-base-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws",
-        "production-validation-base-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws3",
-        "production-auth-issuer": "https://www.ebi.ac.uk/metabolights/iam/realms/metabolights",
+        "production-submission-url": "https://www.ebi.ac.uk/metabolights/ws/isa-json/submit",
+        "production-initiation-url": "https://www.ebi.ac.uk/metabolights/ws/isa-json/initiate",
         "production-auth-url": "https://www.ebi.ac.uk/metabolights/iam/realms/metabolights/protocol/openid-connect/token",
         "production-auth-client-name": "swagger-ui",
         "development-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws3/version",
-        "development-submission-base-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws",
-        "development-validation-base-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws3",
-        "development-auth-issuer": "https://wwwdev.ebi.ac.uk/metabolights/test/iam/realms/metabolights",
+        "development-submission-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws/isa-json/submit",
+        "development-initiation-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws/isa-json/initiate",
         "development-auth-url": "https://wwwdev.ebi.ac.uk/metabolights/test/iam/realms/metabolights/protocol/openid-connect/token",
         "development-auth-client-name": "swagger-ui-test",
     }

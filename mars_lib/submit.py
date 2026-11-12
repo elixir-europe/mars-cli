@@ -2,7 +2,6 @@ from configparser import ConfigParser
 import os
 from datetime import datetime
 from io import TextIOWrapper
-import time
 import requests
 import json
 from typing import Any
@@ -26,14 +25,12 @@ from mars_lib.isa_json import (
     reduce_investigation_for_target_repo,
     update_initiation_comments,
     update_investigation,
-    map_data_files_to_repositories,
 )
 from mars_lib.models.abstract_repository_client import (
     DataFileTransferConfig,
     DataTransferProtocol,
     RepositoryClientError,
     SubmissionContext,
-    TooEarlyError,
 )
 from mars_lib.models.isa_json import Investigation
 from mars_lib.models.repository_response import RepositoryResponse
@@ -66,7 +63,7 @@ def submission(
     file_transfer: str,
     output: str,
     config: ConfigParser,
-    data_file_paths: list[TextIOWrapper] = [],
+    data_file_paths: list[str] = [],
     is_development: bool = False,
     submission_retry_period_in_seconds: int = 10,
     submission_max_retry: int = 10,
@@ -103,10 +100,27 @@ def submission(
 
     print_and_log(f"ISA JSON with investigation '{investigation.title}' is valid.")
 
+    # Check that every data file in the ISA-JSON is matched by a passed file
+    # data_file_report = check_data_files(
+    #     [str(dfp) for dfp in data_file_paths], investigation
+    # )
+    # data_file_report.log()
+    # if data_file_report.missing:
+    #     raise ValueError(
+    #         "Data files referenced in the ISA JSON are missing from the data files "
+    #         f"passed in the command: {', '.join(data_file_report.missing)}"
+    #     )
+    # if data_file_report.duplicates:
+    #     raise ValueError(
+    #         "Multiple data files share the name of a data file in the ISA JSON: "
+    #         f"{', '.join(data_file_report.duplicates)}"
+    #     )
+
     # create data file map
-    data_file_map = map_data_files_to_repositories(
-        files=[str(dfp) for dfp in data_file_paths or []], investigation=investigation
-    )
+    # data_file_map = map_data_files_to_repositories(
+    #     files=[str(dfp) for dfp in data_file_paths or []], investigation=investigation
+    # )
+    data_file_map = {}
 
     time_stamp = datetime.timestamp(datetime.now())
 
@@ -257,16 +271,9 @@ def submission(
             # 5- Submit ISA-JSON with async way, if there is not receipt adaptor will raise
             #    TooEarlyError
             ################################################################################
-            mars_receipt = None
-            for _ in range(context.submission_max_retry):
-                try:
-                    mars_receipt = repository_client.upload_isa_json(
-                        context, repository_token=repository_token
-                    )
-                    break
-                except TooEarlyError:
-                    pass
-                time.sleep(context.submission_retry_period_in_seconds)
+            mars_receipt = repository_client.upload_isa_json(
+                context, repository_token=repository_token
+            )
 
             ################################################################################
             # 6- Evaluate receipt and update investigation (if it is successful)
@@ -291,7 +298,7 @@ def submission(
         except RepositoryClientError as err:
             print_and_log(
                 f"Repository client error for {repository_name} submission. "
-                f"{type(err)}: {err.args}",
+                f"{err.__class__.__name__}: {err.args}",
                 level="error",
             )
 

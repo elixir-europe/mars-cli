@@ -1,7 +1,5 @@
 from configparser import ConfigParser
 import json
-from pathlib import Path
-from types import SimpleNamespace
 from urllib.parse import parse_qs
 
 import pytest
@@ -17,11 +15,123 @@ from mars_lib.models.abstract_repository_client import (
     SubmissionContext,
     Token,
 )
-from mars_lib.models.isa_json import Investigation
+from mars_lib.models.isa_json import Comment, Investigation
 from mars_lib.repositories.metabolights_client import MetaboLightsRepositoryClient
+from mars_lib.target_repo import TARGET_REPO_KEY
 
 
-class _TestRepositoryClient(BaseRepositoryClient):
+def _assay(index, target_repository="metabolights", technology="mass spectrometry"):
+    return {
+        "@id": f"#assay/{index}",
+        "filename": f"a_assay_{index}.txt",
+        "comments": [
+            {"name": TARGET_REPO_KEY, "value": target_repository},
+            {"name": "assay type", "value": "LC-MS"},
+        ],
+        "dataFiles": [],
+        "materials": {"samples": [{"@id": "#sample/1"}]},
+        "processSequence": [
+            {
+                "@id": f"#assay-process/{index}",
+                "name": "measurement",
+                "executesProtocol": {"@id": "#protocol/1"},
+            }
+        ],
+        "technologyType": {"annotationValue": technology},
+    }
+
+
+def _study(index=1, assays=None):
+    return {
+        "@id": f"#study/{index}",
+        "filename": f"s_study_{index}.txt",
+        "title": f"Study {index}",
+        "characteristicCategories": [
+            {
+                "@id": "#characteristic/organism",
+                "characteristicType": {"annotationValue": "organism"},
+            }
+        ],
+        "protocols": [{"@id": "#protocol/1", "name": "Extraction"}],
+        "materials": {
+            "sources": [
+                {
+                    "@id": "#source/1",
+                    "name": "source 1",
+                    "characteristics": [
+                        {"category": {"@id": "#characteristic/organism"}}
+                    ],
+                }
+            ],
+            "samples": [
+                {
+                    "@id": "#sample/1",
+                    "name": "sample 1",
+                    "characteristics": [
+                        {"category": {"@id": "#characteristic/organism"}}
+                    ],
+                    "derivesFrom": [{"@id": "#source/1"}],
+                }
+            ],
+        },
+        "processSequence": [
+            {
+                "@id": f"#study-process/{index}",
+                "name": "extraction",
+                "executesProtocol": {"@id": "#protocol/1"},
+            }
+        ],
+        "assays": assays if assays is not None else [_assay(index)],
+    }
+
+
+def _investigation(studies=None):
+    return Investigation.model_validate(
+        {
+            "@id": "#investigation/1",
+            "filename": "i_investigation.txt",
+            "title": "Test investigation",
+            "studies": studies if studies is not None else [_study()],
+        }
+    )
+
+
+def _repository_config(credentials=None, settings=None):
+    return RepositoryConfig(
+        credentials=credentials
+        if credentials is not None
+        else {"username": "test-user", "password": "test-password"},
+        settings=settings
+        if settings is not None
+        else {
+            "url": "https://metabolights.test/api",
+            "auth-url": "https://metabolights.test/token",
+            "auth-client-name": "mars-cli",
+            "initiation-url": "https://metabolights.test/initiate",
+            "submission-url": "https://metabolights.test/submit",
+            "submission-poll-url": "https://metabolights.test/poll",
+        },
+    )
+
+
+def _context(
+    investigation=None,
+    repository_config=None,
+    submission_id=None,
+    max_retry=3,
+    retry_period=0,
+):
+    return SubmissionContext(
+        is_development=True,
+        filtered_investigation=investigation or _investigation(),
+        repository_config=repository_config or _repository_config(),
+        submission_id=submission_id,
+        submission_max_retry=max_retry,
+        submission_retry_period_in_seconds=retry_period,
+    )
+
+
+class _ConcreteRepositoryClient(BaseRepositoryClient):
     def check_repository_config(self, repository_config):
         return None
 
@@ -32,108 +142,262 @@ class _TestRepositoryClient(BaseRepositoryClient):
         return None
 
 
-def _assay(target, technology="mass spectrometry", assay_type="LC-MS"):
-    return {
-        "comments": [
-            {"name": "target_repository", "value": target},
-            {"name": "assay type", "value": assay_type},
-        ],
-        "technologyType": {"annotationValue": technology},
-    }
+class _Response:
+    def __init__(self, payload=None, status_code=200, content=b"response body"):
+        self.payload = payload or {}
+        self.status_code = status_code
+        self.content = content
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"HTTP {self.status_code}")
+
+    def json(self):
+        return self.payload
 
 
-def _investigation(*studies):
-    return Investigation.model_validate({"studies": list(studies)})
-
-
-def _submission_context(*, submission_id=None, settings=None, investigation=None):
-    return SubmissionContext(
-        submission_id=submission_id,
-        is_development=True,
-        filtered_investigation=investigation
-        or _investigation({"assays": [_assay("metabolights")]}),
-        repository_config=RepositoryConfig(
-            credentials={"username": "user", "password": "password"},
-            settings={
-                "auth-url": "https://auth.example.test/token",
-                "auth-client-name": "mars",
-                "submission-base-url": "https://submission.example.test",
-                "auth-issuer": "https://issuer.example.test",
-                "submission-url": "https://submission.example.test/isa",
-                **(settings or {}),
-            },
-        ),
-    )
-
-
-def test_get_repository_config_selects_development_settings_and_credentials():
-    client = _TestRepositoryClient("demo", "demo")
-    config = ConfigParser()
-    config.read_dict(
-        {
-            "demo": {
-                "common-option": "shared",
-                "development-url": "https://dev.example.test",
-                "production-url": "https://prod.example.test",
-            }
-        }
-    )
-
-    result = client.get_repository_config(
-        config=config,
-        credentials={"demo-development": {"username": "dev-user"}},
-        is_development=True,
-    )
-
-    assert result.settings == {
-        "common-option": "shared",
-        "url": "https://dev.example.test",
-    }
-    assert result.credentials == {"username": "dev-user"}
-
-
-def test_get_repository_config_rejects_missing_configuration():
-    client = _TestRepositoryClient("demo", "demo")
-
-    with pytest.raises(RepositoryConfigError, match="configuration is not defined"):
-        client.get_repository_config()
-    with pytest.raises(RepositoryConfigError, match="There is no demo section"):
-        client.get_repository_config(config=ConfigParser())
-
-
-def test_reduce_investigation_keeps_target_assays_and_referenced_protocols():
+def test_reduce_investigation_filters_assays_and_protocols_without_mutating_input():
     investigation = _investigation(
-        {
-            "assays": [_assay("metabolights"), _assay("ena")],
-            "protocols": [{"@id": "used"}, {"@id": "unused"}],
-            "processSequence": [
-                {"executesProtocol": {"@id": "used"}},
-            ],
-        }
+        [
+            _study(
+                assays=[
+                    _assay(1, target_repository="metabolights"),
+                    _assay(2, target_repository="ena"),
+                ]
+            ),
+            _study(
+                index=2,
+                assays=[_assay(3, target_repository="ena")],
+            ),
+        ]
     )
-    client = MetaboLightsRepositoryClient()
+    client = _ConcreteRepositoryClient("metabolights", "metabolights")
 
     reduced = client.reduce_investigation(investigation)
 
-    assert len(reduced.studies) == 1
-    assert len(reduced.studies[0].assays) == 1
-    assert reduced.studies[0].assays[0].comments[0].value == "metabolights"
-    assert [protocol.id for protocol in reduced.studies[0].protocols] == ["used"]
-    # The source object is copied before filtering.
+    assert [study.id for study in reduced.studies] == ["#study/1"]
+    assert [assay.id for assay in reduced.studies[0].assays] == ["#assay/1"]
+    assert [protocol.id for protocol in reduced.studies[0].protocols] == ["#protocol/1"]
+    assert len(investigation.studies) == 2
     assert len(investigation.studies[0].assays) == 2
-    assert len(investigation.studies[0].protocols) == 2
 
 
-def test_metabolights_reduce_investigation_keeps_only_first_study():
-    investigation = _investigation(
-        {"assays": [_assay("metabolights")]},
-        {"assays": [_assay("metabolights")]},
+def test_filter_comments_by_key_returns_only_matching_comments():
+    client = _ConcreteRepositoryClient("metabolights", "metabolights")
+    comments = [
+        {"name": "other", "value": "keep out"},
+        {"name": TARGET_REPO_KEY, "value": "ena"},
+        {"name": TARGET_REPO_KEY, "value": "metabolights"},
+    ]
+
+    matches = client._filter_comments_by_key(
+        [Comment.model_validate(comment) for comment in comments], TARGET_REPO_KEY
     )
 
-    reduced = MetaboLightsRepositoryClient().reduce_investigation(investigation)
+    assert [comment.value for comment in matches] == ["ena", "metabolights"]
+    assert client._filter_comments_by_key([], TARGET_REPO_KEY) == []
 
-    assert len(reduced.studies) == 1
+
+def test_get_repository_config_uses_development_settings_and_credentials():
+    parser = ConfigParser()
+    parser["metabolights"] = {
+        "url": "https://production.test",
+        "development-url": "https://development.test",
+        "production-url": "https://production-override.test",
+    }
+    client = _ConcreteRepositoryClient("metabolights", "metabolights")
+
+    config = client.get_repository_config(
+        parser,
+        credentials={"metabolights-development": {"username": "dev"}},
+        is_development=True,
+    )
+
+    assert config.settings == {"url": "https://development.test"}
+    assert config.credentials == {"username": "dev"}
+
+
+def test_get_repository_config_rejects_missing_configuration():
+    client = _ConcreteRepositoryClient("metabolights", "metabolights")
+
+    with pytest.raises(RepositoryConfigError, match="configuration is not defined"):
+        client.get_repository_config(credentials={})
+
+    config = ConfigParser()
+    config["other"] = {"setting": "value"}
+    with pytest.raises(RepositoryConfigError, match="There is no metabolights section"):
+        client.get_repository_config(config, credentials={})
+
+
+def test_metabolights_config_validation_reports_missing_fields():
+    client = MetaboLightsRepositoryClient()
+
+    errors = client.check_repository_config(
+        RepositoryConfig(
+            credentials={"username": "test-user"}, settings={"other": "value"}
+        )
+    )
+
+    assert errors == [
+        "Password not defined for metabolights",
+        "url is not defined for metabolights",
+        "auth-url is not defined for metabolights",
+        "auth-client-name is not defined for metabolights",
+        "initiation-url is not defined for metabolights",
+        "submission-url is not defined for metabolights",
+    ]
+
+
+def test_metabolights_config_validation_accepts_complete_configuration():
+    client = MetaboLightsRepositoryClient()
+
+    assert client.check_repository_config(_repository_config()) is None
+
+
+def test_get_token_posts_password_grant_and_returns_both_tokens(monkeypatch):
+    client = MetaboLightsRepositoryClient()
+    context = _context()
+    captured = {}
+
+    def fake_post(url, **kwargs):
+        captured.update(url=url, **kwargs)
+        return _Response({"access_token": "access", "refresh_token": "refresh"})
+
+    monkeypatch.setattr(
+        "mars_lib.repositories.metabolights_client.requests.post", fake_post
+    )
+
+    token = client.get_token(context)
+
+    assert captured["url"] == "https://metabolights.test/token"
+    assert captured["headers"]["Content-Type"] == "application/x-www-form-urlencoded"
+    assert parse_qs(captured["data"]) == {
+        "grant_type": ["password"],
+        "scope": ["openid profile email"],
+        "username": ["test-user"],
+        "password": ["test-password"],
+        "client_id": ["mars-cli"],
+    }
+    assert captured["timeout"] == 20
+    assert token == Token(token="access", refresh_token="refresh")
+
+
+def test_get_token_raises_auth_error_for_http_failure(monkeypatch):
+    client = MetaboLightsRepositoryClient()
+
+    monkeypatch.setattr(
+        "mars_lib.repositories.metabolights_client.requests.post",
+        lambda *args, **kwargs: _Response(status_code=401, content=b"bad credentials"),
+    )
+
+    with pytest.raises(AuthError, match="Status: 401"):
+        client.get_token(_context())
+
+
+def test_get_token_raises_auth_error_when_access_token_is_missing(monkeypatch):
+    client = MetaboLightsRepositoryClient()
+    monkeypatch.setattr(
+        "mars_lib.repositories.metabolights_client.requests.post",
+        lambda *args, **kwargs: _Response({"refresh_token": "refresh"}),
+    )
+
+    with pytest.raises(AuthError, match="ERROR when generating token"):
+        client.get_token(_context())
+
+
+def test_reduce_investigation_keeps_metabolights_assays_in_first_study():
+    client = MetaboLightsRepositoryClient()
+    investigation = _investigation(
+        [
+            _study(
+                assays=[
+                    _assay(1, target_repository="metabolights"),
+                    _assay(2, target_repository="ena"),
+                ]
+            ),
+            _study(index=2),
+        ]
+    )
+
+    reduced = client.reduce_investigation(investigation)
+
+    assert [study.id for study in reduced.studies] == ["#study/1"]
+    assert [assay.id for assay in reduced.studies[0].assays] == ["#assay/1"]
     assert len(investigation.studies) == 2
+
+
+def test_initiate_submission_posts_isa_json_and_parses_response(monkeypatch):
+    client = MetaboLightsRepositoryClient()
+    context = _context()
+    captured = {}
+    response = {
+        "submissionId": "submission-1",
+        "ftpCredentials": {
+            "host": "ftp.test",
+            "username": "ftp-user",
+            "password": "ftp-password",
+            "uploadPath": "/upload/1",
+        },
+    }
+
+    def fake_post(url, **kwargs):
+        captured.update(url=url, **kwargs)
+        return _Response(response)
+
+    monkeypatch.setattr(
+        "mars_lib.repositories.metabolights_client.requests.post", fake_post
+    )
+
+    result = client.initiate_submission(context, Token(token="access"))
+
+    assert captured["url"] == "https://metabolights.test/initiate"
+    assert captured["headers"] == {
+        "accept": "application/json",
+        "Authorization": "Bearer access",
+    }
+    assert captured["timeout"] == 60
+    assert captured["files"]["isa_json_file"][0] == "isa_json.json"
+    uploaded_isa = json.loads(captured["files"]["isa_json_file"][1].getvalue())
+    assert uploaded_isa["@id"] == "#investigation/1"
+    assert result.submission_id == "submission-1"
+    assert result.ftp_credentials.upload_path == "/upload/1"
+
+
+def test_initiate_submission_reuses_id_without_uploading_isa(monkeypatch):
+    client = MetaboLightsRepositoryClient()
+    context = _context(submission_id="existing-submission")
+    captured = {}
+
+    def fake_post(url, **kwargs):
+        captured.update(url=url, **kwargs)
+        return _Response({"submissionId": "existing-submission"})
+
+    monkeypatch.setattr(
+        "mars_lib.repositories.metabolights_client.requests.post", fake_post
+    )
+
+    result = client.initiate_submission(context, Token(token="access"))
+
+    assert captured["headers"]["submission-id"] == "existing-submission"
+    assert captured["files"] is None
+    assert result.submission_id == "existing-submission"
+
+
+def test_initiate_submission_requires_a_token():
+    client = MetaboLightsRepositoryClient()
+
+    with pytest.raises(RepositorySubmissionError, match="Token is required"):
+        client.initiate_submission(_context(), None)
+
+
+def test_initiate_submission_rejects_invalid_repository_configuration():
+    client = MetaboLightsRepositoryClient()
+    context = _context(repository_config=RepositoryConfig(credentials={}, settings={}))
+
+    with pytest.raises(
+        RepositoryInitiationError, match="repository configuration error"
+    ):
+        client.initiate_submission(context, Token(token="access"))
 
 
 @pytest.mark.parametrize(
@@ -143,408 +407,132 @@ def test_metabolights_reduce_investigation_keeps_only_first_study():
         ("NMR spectroscopy", ("nmr", "nmr")),
     ],
 )
-def test_identify_study_category(technology, expected):
+def test_identify_study_category_for_supported_technologies(technology, expected):
+    client = MetaboLightsRepositoryClient()
     investigation = _investigation(
-        {"assays": [_assay("metabolights", technology=technology)]}
-    )
-    context = SubmissionContext(
-        is_development=True,
-        filtered_investigation=investigation,
-        repository_config=RepositoryConfig(credentials={}, settings={}),
+        [_study(assays=[_assay(1, technology=technology)])]
     )
 
-    assert MetaboLightsRepositoryClient()._identify_study_category(context) == expected
+    assert client._identify_study_category(_context(investigation)) == expected
 
 
-def test_identify_study_category_rejects_missing_or_mixed_technology():
+def test_identify_study_category_rejects_mixed_technologies():
     client = MetaboLightsRepositoryClient()
-    config = RepositoryConfig(credentials={}, settings={})
+    investigation = _investigation(
+        [
+            _study(
+                assays=[
+                    _assay(1, technology="mass spectrometry"),
+                    _assay(2, technology="NMR spectroscopy"),
+                ]
+            )
+        ]
+    )
 
-    for assays, message in [
-        ([_assay("metabolights", technology="")], "technology type is not defined"),
-        (
-            [
-                _assay("metabolights", technology="mass spectrometry"),
-                _assay("metabolights", technology="NMR"),
-            ],
-            "Multiple assay technology type is not supported",
-        ),
-    ]:
-        context = SubmissionContext(
-            is_development=True,
-            filtered_investigation=_investigation({"assays": assays}),
-            repository_config=config,
-        )
-        with pytest.raises(RepositorySubmissionError, match=message):
-            client._identify_study_category(context)
+    with pytest.raises(RepositorySubmissionError, match="Multiple assay technology"):
+        client._identify_study_category(_context(investigation))
 
 
-@pytest.mark.parametrize(
-    ("repository_config", "expected_errors"),
-    [
-        (None, ["MetaboLights repository  configuration is not defined"]),
-        (
-            RepositoryConfig(credentials={}, settings={}),
-            [
-                "Credentials are not defined for metabolights",
-                "Settings are not defined for metabolights",
-            ],
-        ),
-        (
-            RepositoryConfig(
-                credentials={"username": "user"}, settings={"auth-url": "url"}
+def test_upload_isa_json_puts_document_then_polls_until_complete(monkeypatch):
+    client = MetaboLightsRepositoryClient()
+    context = _context(submission_id="submission-1", max_retry=3, retry_period=0)
+    captured = {}
+    poll_responses = iter(
+        [
+            _Response(
+                {
+                    "targetRepository": "metabolights",
+                    "submissionStatus": "PENDING",
+                    "taskId": "task-1",
+                }
             ),
-            [
-                "Password not defined for metabolights",
-                "auth-client-name is not defined for metabolights",
-            ],
-        ),
-    ],
-)
-def test_check_repository_config(repository_config, expected_errors):
-    assert (
-        MetaboLightsRepositoryClient().check_repository_config(repository_config)
-        == expected_errors
+            _Response(
+                {
+                    "targetRepository": "metabolights",
+                    "submissionStatus": "SUCCESS",
+                    "submissionId": "submission-1",
+                    "taskId": "task-1",
+                }
+            ),
+        ]
     )
 
-
-def test_check_repository_config_accepts_complete_settings():
-    assert (
-        MetaboLightsRepositoryClient().check_repository_config(
-            RepositoryConfig(
-                credentials={"username": "user", "password": "password"},
-                settings={
-                    "auth-url": "https://auth.example.test",
-                    "auth-client-name": "mars",
-                },
-            )
+    def fake_put(url, **kwargs):
+        captured.update(url=url, **kwargs)
+        return _Response(
+            {
+                "targetRepository": "metabolights",
+                "submissionStatus": "PENDING",
+                "taskId": "task-1",
+            }
         )
-        is None
-    )
 
+    get_calls = []
 
-def test_get_token_posts_form_and_returns_tokens(monkeypatch):
-    client = MetaboLightsRepositoryClient()
-    context = SubmissionContext(
-        is_development=True,
-        filtered_investigation=_investigation({"assays": [_assay("metabolights")]}),
-        repository_config=RepositoryConfig(
-            credentials={"username": "user@example.test", "password": "secret"},
-            settings={
-                "auth-url": "https://auth.example.test/token",
-                "auth-client-name": "mars",
-            },
-        ),
-    )
-
-    # Keep the response deliberately minimal to exercise the HTTP contract.
-    class _Response:
-        content = b""
-
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return {"access_token": "access", "refresh_token": "refresh"}
-
-    calls = []
-
-    def fake_post(url, **kwargs):
-        calls.append((url, kwargs))
-        return _Response()
+    def fake_get(url, **kwargs):
+        get_calls.append((url, kwargs))
+        return next(poll_responses)
 
     monkeypatch.setattr(
-        "mars_lib.repositories.metabolights_client.requests.post", fake_post
+        "mars_lib.repositories.metabolights_client.requests.put", fake_put
+    )
+    monkeypatch.setattr(
+        "mars_lib.repositories.metabolights_client.requests.get", fake_get
+    )
+    monkeypatch.setattr(
+        "mars_lib.repositories.metabolights_client.time.sleep", lambda _: None
     )
 
-    token = client.get_token(context)
+    result = client.upload_isa_json(context, Token(token="access"))
 
-    assert token == Token(token="access", refresh_token="refresh")
-    assert calls[0][0] == "https://auth.example.test/token"
-    assert calls[0][1]["timeout"] == 20
-    assert parse_qs(calls[0][1]["data"]) == {
-        "grant_type": ["password"],
-        "scope": ["openid profile email"],
-        "username": ["user@example.test"],
-        "password": ["secret"],
-        "client_id": ["mars"],
+    assert captured["url"] == "https://metabolights.test/submit"
+    assert captured["headers"]["Authorization"] == "Bearer access"
+    assert captured["headers"]["submission-id"] == "submission-1"
+    assert captured["timeout"] == 120
+    assert len(get_calls) == 2
+    assert get_calls[-1][1]["headers"]["task-id"] == "task-1"
+    assert result.submission_status == "SUCCESS"
+
+
+def test_upload_isa_json_rejects_missing_submission_id():
+    client = MetaboLightsRepositoryClient()
+
+    with pytest.raises(RepositorySubmissionError, match="submission-id is required"):
+        client.upload_isa_json(_context(), Token(token="access"))
+
+
+def test_upload_isa_json_reports_when_polling_never_finishes(monkeypatch):
+    client = MetaboLightsRepositoryClient()
+    context = _context(submission_id="submission-1", max_retry=2, retry_period=0)
+    pending = {
+        "targetRepository": "metabolights",
+        "submissionStatus": "PENDING",
+        "taskId": "task-1",
     }
+    monkeypatch.setattr(
+        "mars_lib.repositories.metabolights_client.requests.put",
+        lambda *args, **kwargs: _Response(pending),
+    )
+    monkeypatch.setattr(
+        "mars_lib.repositories.metabolights_client.requests.get",
+        lambda *args, **kwargs: _Response(pending),
+    )
+    monkeypatch.setattr(
+        "mars_lib.repositories.metabolights_client.time.sleep", lambda _: None
+    )
+
+    with pytest.raises(RepositorySubmissionError, match="Retries reach to maximum"):
+        client.upload_isa_json(context, Token(token="access"))
 
 
-def test_get_token_raises_auth_error_for_http_failure(monkeypatch):
+def test_upload_isa_json_wraps_put_errors(monkeypatch):
     client = MetaboLightsRepositoryClient()
-    context = SubmissionContext(
-        is_development=True,
-        filtered_investigation=_investigation({"assays": [_assay("metabolights")]}),
-        repository_config=RepositoryConfig(
-            credentials={"username": "user", "password": "bad"},
-            settings={
-                "auth-url": "https://auth.example.test",
-                "auth-client-name": "mars",
-            },
-        ),
-    )
-
-    class _Response:
-        status_code = 401
-        content = b"invalid credentials"
-
-        def raise_for_status(self):
-            raise requests.HTTPError("unauthorized")
-
     monkeypatch.setattr(
-        "mars_lib.repositories.metabolights_client.requests.post",
-        lambda *args, **kwargs: _Response(),
+        "mars_lib.repositories.metabolights_client.requests.put",
+        lambda *args, **kwargs: _Response(status_code=500),
     )
 
-    with pytest.raises(AuthError):
-        client.get_token(context)
-
-
-def test_get_token_raises_auth_error_when_response_has_no_access_token(monkeypatch):
-    context = _submission_context()
-
-    class _Response:
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return {"error": "invalid_grant"}
-
-    monkeypatch.setattr(
-        "mars_lib.repositories.metabolights_client.requests.post",
-        lambda *args, **kwargs: _Response(),
-    )
-
-    with pytest.raises(AuthError, match="ERROR when generating token"):
-        MetaboLightsRepositoryClient().get_token(context)
-
-
-def test_find_value_in_info_section_missing_key():
-    client = MetaboLightsRepositoryClient()
-    info = [{"name": "validation-url", "message": "https://example.test/validate"}]
-
-    assert (
-        client.find_value_in_info_section("validation-url", info)
-        == "https://example.test/validate"
-    )
-    assert (
-        client.find_value_in_info_section("missing", info, fail_gracefully=True) is None
-    )
-    with pytest.raises(ValueError, match="Name missing not found"):
-        client.find_value_in_info_section("missing", info)
-
-
-def test_initiate_submission_reuses_existing_id_and_returns_ftp_credentials(
-    monkeypatch,
-):
-    calls = []
-
-    class _SubmissionClient:
-        def __init__(self, base_url):
-            calls.append(("init", base_url))
-
-        def login_with_jwt(self, **kwargs):
-            pytest.fail("Existing submissions should not log in or create a study")
-
-        def get_private_ftp_credentials(self, study_id):
-            calls.append(("ftp", study_id))
-            return SimpleNamespace(
-                ftp_host="ftp.example.test",
-                ftp_user="ftp-user",
-                ftp_password="ftp-password",
-                ftp_folder="/incoming/MTBLS123",
-            )
-
-    monkeypatch.setattr(
-        "mars_lib.repositories.metabolights_client.SubmissionClient", _SubmissionClient
-    )
-    context = _submission_context(submission_id="MTBLS123")
-
-    result = MetaboLightsRepositoryClient().initiate_submission(
-        context, Token(token="jwt-token", refresh_token="refresh")
-    )
-
-    assert result.submission_id == "MTBLS123"
-    assert result.ftp_credentials.host == "ftp.example.test"
-    assert result.ftp_credentials.username == "ftp-user"
-    assert result.ftp_credentials.password == "ftp-password"
-    assert result.ftp_credentials.upload_path == "/incoming/MTBLS123"
-    assert calls == [
-        ("init", "https://submission.example.test"),
-        ("ftp", "MTBLS123"),
-    ]
-
-
-def test_initiate_submission_creates_study_and_cleans_temporary_request(monkeypatch):
-    calls = []
-
-    class _SubmissionClient:
-        def __init__(self, base_url):
-            calls.append(("init", base_url))
-
-        def login_with_jwt(self, **kwargs):
-            calls.append(("login", kwargs))
-
-        def create_study(self, input_file_path):
-            calls.append(("create", input_file_path))
-            assert Path(input_file_path).exists()
-            payload = json.loads(Path(input_file_path).read_text())
-            assert payload["selectedStudyCategories"] == {"ms-mhd-legacy": ["LC-MS"]}
-            assert payload["selectedSubmissionWorkflows"] == ["mars"]
-            assert payload["datasetLicenseAgreement"] is True
-            assert payload["datasetPolicyAgreement"] is True
-            return {"studies": {"MTBLS_NEW": {}}}
-
-        def get_private_ftp_credentials(self, study_id):
-            calls.append(("ftp", study_id))
-            return SimpleNamespace(
-                ftp_host="ftp.example.test",
-                ftp_user="new-user",
-                ftp_password="new-password",
-                ftp_folder="/incoming/MTBLS_NEW",
-            )
-
-    monkeypatch.setattr(
-        "mars_lib.repositories.metabolights_client.SubmissionClient", _SubmissionClient
-    )
-    context = _submission_context()
-
-    result = MetaboLightsRepositoryClient().initiate_submission(
-        context, Token(token="jwt-token", refresh_token="refresh")
-    )
-
-    assert result.submission_id == "MTBLS_NEW"
-    assert result.ftp_credentials.upload_path == "/incoming/MTBLS_NEW"
-    login_args = calls[2][1]
-    assert login_args == {
-        "jwt_token": "jwt-token",
-        "refresh_token": "refresh",
-        "issuer": "https://issuer.example.test",
-    }
-    assert not Path(calls[3][1]).exists()
-
-
-def test_initiate_submission_rejects_missing_token_and_invalid_context():
-    client = MetaboLightsRepositoryClient()
-
-    with pytest.raises(RepositorySubmissionError, match="Token is required"):
-        client.initiate_submission(_submission_context(), None)
-    with pytest.raises(
-        RepositoryConfigError, match="Token is required for MetaboLights submission"
-    ):
-        client.initiate_submission(None, Token(token="jwt-token"))
-
-
-def test_initiate_submission_rejects_incomplete_repository_config():
-    context = _submission_context()
-    context.repository_config = RepositoryConfig(credentials={}, settings={})
-
-    with pytest.raises(
-        RepositoryInitiationError, match="repository configuration error"
-    ):
-        MetaboLightsRepositoryClient().initiate_submission(
-            context, Token(token="jwt-token")
+    with pytest.raises(RepositorySubmissionError, match="HTTP 500"):
+        client.upload_isa_json(
+            _context(submission_id="submission-1"), Token(token="access")
         )
-
-
-def test_initiate_submission_fails_when_study_creation_returns_no_study(monkeypatch):
-    created_files = []
-
-    class _SubmissionClient:
-        def __init__(self, base_url):
-            pass
-
-        def login_with_jwt(self, **kwargs):
-            pass
-
-        def create_study(self, input_file_path):
-            created_files.append(input_file_path)
-            return {"studies": {}}
-
-    monkeypatch.setattr(
-        "mars_lib.repositories.metabolights_client.SubmissionClient", _SubmissionClient
-    )
-
-    with pytest.raises(
-        RepositorySubmissionError, match="Submission id is not defined or created"
-    ):
-        MetaboLightsRepositoryClient().initiate_submission(
-            _submission_context(), Token(token="jwt-token")
-        )
-
-    assert len(created_files) == 1
-    assert not Path(created_files[0]).exists()
-
-
-def test_upload_isa_json_posts_serialized_investigation(monkeypatch):
-    context = _submission_context()
-    calls = []
-
-    class _Response:
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return {"errors": []}
-
-    def fake_post(url, **kwargs):
-        calls.append((url, kwargs))
-        filename, payload_file = kwargs["files"]["isa_json_file"]
-        assert filename == "isa_json.json"
-        assert json.loads(
-            payload_file.getvalue()
-        ) == context.filtered_investigation.model_dump(by_alias=True, exclude_none=True)
-        return _Response()
-
-    monkeypatch.setattr(
-        "mars_lib.repositories.metabolights_client.requests.post", fake_post
-    )
-
-    result = MetaboLightsRepositoryClient().upload_isa_json(
-        context, Token(token="jwt-token")
-    )
-
-    assert result is None
-    assert calls[0][0] == "https://submission.example.test/isa"
-    assert calls[0][1]["headers"] == {
-        "accept": "application/json",
-        "Authorization": "Bearer jwt-token",
-    }
-    assert calls[0][1]["timeout"] == 120
-
-
-def test_upload_isa_json_wraps_repository_validation_errors(monkeypatch):
-    context = _submission_context()
-
-    class _Response:
-        status_code = 400
-        request = SimpleNamespace(
-            body=b"request body",
-            method="POST",
-            url="https://submission.example.test/isa",
-            headers={"Authorization": "Bearer jwt-token"},
-        )
-
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return {"errors": [{"message": "invalid ISA"}]}
-
-    monkeypatch.setattr(
-        "mars_lib.repositories.metabolights_client.requests.post",
-        lambda *args, **kwargs: _Response(),
-    )
-
-    with pytest.raises(
-        RepositorySubmissionError, match="Request towards MetaboLights failed"
-    ):
-        MetaboLightsRepositoryClient().upload_isa_json(
-            context, Token(token="jwt-token")
-        )
-
-
-def test_upload_isa_json_requires_submission_token():
-    with pytest.raises(RepositorySubmissionError, match="Token is required"):
-        MetaboLightsRepositoryClient().upload_isa_json(_submission_context(), None)

@@ -59,15 +59,16 @@ def ensure_settings_ini() -> Path:
 
         [metabolights]
         "production-url": "https://www.ebi.ac.uk/metabolights/ws3/version"
-        "production-submission-base-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws"
-        "production-validation-base-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws3"
-        "production-auth-issuer": "https://www.ebi.ac.uk/metabolights/iam/realms/metabolights"
+        "production-submission-url": "https://www.ebi.ac.uk/metabolights/ws/provisional-studies/isa-json-submission"
+        "production-initiation-url": "https://www.ebi.ac.uk/metabolights/ws"
+        "production-initiation-url": "https://www.ebi.ac.uk/metabolights/test/ws"
+        "production-validation-base-url": "https://www.ebi.ac.uk/metabolights/test/ws3"
         "production-auth-url": "https://www.ebi.ac.uk/metabolights/iam/realms/metabolights/protocol/openid-connect/token"
         "production-auth-client-name": "swagger-ui"
         "development-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws3/version"
-        "development-submission-base-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws"
+        "development-submission-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws/provisional-studies/isa-json-submission"
+        "development-initiation-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws"
         "development-validation-base-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws3"
-        "development-auth-issuer": "https://wwwdev.ebi.ac.uk/metabolights/test/iam/realms/metabolights"
         "development-auth-url": "https://wwwdev.ebi.ac.uk/metabolights/test/iam/realms/metabolights/protocol/openid-connect/token"
         "development-auth-client-name": "swagger-ui-test"
         """
@@ -114,7 +115,7 @@ def resolve_isa_template() -> Path:
     if template_env:
         src = Path(template_env)
     else:
-        src = PROJECT_ROOT.parent / "MARS" / "test-data" / "biosamples-input-isa.json"
+        src = PROJECT_ROOT.parent / "MARS" / "test-data" / "ena-minimal.json"
 
     if not src.exists():
         raise FileNotFoundError(f"ISA template not found at {src}")

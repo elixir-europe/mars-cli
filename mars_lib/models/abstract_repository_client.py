@@ -110,6 +110,7 @@ class InitiationResponse(AbstractClientModel):
         None | dict[str, str],
         Field(description="Additional assay comments associated with this submission."),
     ] = None
+    errors: None | list[str] = None
 
 
 class DataFileTransferConfig(AbstractClientModel):

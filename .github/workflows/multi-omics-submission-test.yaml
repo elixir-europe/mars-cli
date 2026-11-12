@@ -78,16 +78,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          DATA_ARGS=()
-          for data_file in poc_work/multi-omics/data/*; do
-            DATA_ARGS+=( --data-files "$data_file" )
-          done
-
           mars-cli --development submit \
             --submit-to-metabolights False \
             --file-transfer ftp \
             --output "output_multi_omics_${{ github.run_id }}_${{ github.run_attempt }}" \
-            "${DATA_ARGS[@]}" \
+            --data-folder poc_work/multi-omics/data \
             --credentials-file ./poc_work/credentials.json \
             poc_work/multi-omics/isa.json
 
@@ -95,16 +90,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          DATA_ARGS=()
-          for data_file in poc_work/holofood/data/*; do
-            DATA_ARGS+=( --data-files "$data_file" )
-          done
-
           mars-cli --development submit \
             --submit-to-metabolights False \
             --file-transfer ftp \
             --output "output_holofood_${{ github.run_id }}_${{ github.run_attempt }}" \
-            "${DATA_ARGS[@]}" \
+            --data-folder poc_work/holofood/data \
             --credentials-file ./poc_work/credentials.json \
             poc_work/holofood/isa.json
 

@@ -89,7 +89,7 @@ To regenerate the default settings, delete the `settings.ini` file and run the C
 
 ```
 [logging]
-log_level = ERROR
+log_level = INFO
 log_file = /my/logging/directory/.mars/app.log
 log_max_size = 1024
 log_max_files = 5
@@ -132,7 +132,7 @@ __log_level__: The verbosity of logging can be set to three different levels
 - WARNING: Warnings, errors and critical messages will be logged.
 - INFO: All events are logged.
 - DEBUG: For debugging purpose only. __Not recommended as it might log more sensitive information!__
-The default setting is ERROR. So only errors are logged!
+The default setting is INFO. So all events are logged, except debug messages. Existing settings files keep their current value, so change `log_level` there if you want the new default.
 
 __log_file__: The path to the log file. By default this will be in `$HOME/.mars/app.log`.
 
@@ -182,6 +182,7 @@ Options:
   --help             Show this message and exit.
 
 Commands:
+  check-data-files   Check that the data files in the ISA JSON match the files...
   health-check       Check the health of the target repositories.
   set-password       Store a password in the keyring.
   submit             Start a submission to the target repositories.
@@ -206,7 +207,9 @@ Options:
   --output TEXT
   --submit-to-metabolights BOOLEAN
                                   Submit to Metabolights.
-  --data-files FILENAME           Path of files to upload
+  --data-folder DIRECTORY         Path to a folder holding the files to upload.
+                                  All files in the folder (recursively) are
+                                  included. Can be passed multiple times.
   --file-transfer TEXT            provide the name of a file transfer
                                   solution, like ftp or aspera
   --submit-to-ena BOOLEAN         Submit to ENA.
@@ -216,6 +219,8 @@ Options:
   --credential-service-name TEXT  service name from the keyring
   --help                          Show this message and exit.
 ```
+
+__IMPORTANT:__ All the data files in the ISA-JSON should have a __UNIQUE__ name.
 
 ### Development vs production
 
@@ -286,11 +291,11 @@ mars-cli submit --submit-to-ena False my-credentials my-isa-json.json
 
 `--file-transfer`: Provide the name of a file transfer solution, like ftp or aspera
 
-`--data-file`: Paths of files to upload.
+`--data-folder`: Path to a folder holding the files to upload. All files in the folder (recursively) are included. Can be passed multiple times. Only folders are accepted, not individual files.
 
-> **Note**: Following command line will submit isa-file and data-file using FTP solution to Biosamples and  ENA:
+> **Note**: Following command line will submit isa-file and data files using FTP solution to Biosamples and  ENA:
 ```sh
-mars-cli submit --submit-to-metabolights False --file-transfer ftp --data-files ../data/file_to_upload.fastq.gz my-credentials my-isa-json.json
+mars-cli submit --submit-to-metabolights False --file-transfer ftp --data-folder ../data my-credentials my-isa-json.json
 ```
 
 #### Metabolights submissions
@@ -309,6 +314,28 @@ mars-cli submit --submit-to-metabolights False my-credentials my-isa-json.json
 ```sh
 mars-cli submit --output final_isa my-credentials my-isa-json.json
 ```
+
+## Feature: Check data files against the ISA JSON
+
+Check that every data file in the ISA-JSON is present in the data folder(s), without submitting anything. Files are
+matched on file name, folders are searched recursively and `--data-folder` can be passed multiple times.
+
+```sh
+mars-cli check-data-files --data-folder ../data my-isa-json.json
+```
+
+```
+Data file check for ISA JSON with investigation 'My investigation':
+- Data files matched to a data file in the ISA JSON: 12
+- Data files not referenced in the ISA JSON: 1
+- ISA JSON data files without a matching data file: 1
+Not referenced in the ISA JSON: ../data/not-in-isa.fastq
+Missing data file: rna-seq-data-3.fastq
+```
+
+Unreferenced files are skipped during submission. The command exits with a non-zero status if a data file is missing,
+or if more than one file in the data folders has the name of the same data file in the ISA-JSON. `submit` runs the
+same check first and stops before anything is sent if either happens.
 
 ## Feature:  Extending BioSamples' records
 
@@ -339,25 +366,25 @@ To summarize, the steps of the code are:
 After configuring the `settings.ini` file, you can run the MARS CLI tool to submit the isa-json:
 
 ```bash
-python mars_cli.py --development submit --submit-to-metabolights False --submit-to-ena False --credential-service-name <biosamples> --username-credentials <username> ../test-data/biosamples-input-isa.json
+python mars_cli.py --development submit --submit-to-metabolights False --submit-to-ena False --credential-service-name <biosamples> --username-credentials <username> MARS/test-data/ena-minimal.json
 ```
 
 - Replace `<biosamples>` with the appropriate service name.
 - Replace `<username>` with your BioSamples username.
-- Adjust the submission file path (`../test-data/biosamples-input-isa.json`) as needed.
+- Adjust the submission file path (`MARS/test-data/ena-minimal.json`) as needed.
 
-Aternatively, you can also use a credentials file to authenticate to the services. An example can be found here: https://github.com/elixir-europe/MARS/blob/main/mars-cli/tests/test_credentials_example.json
+Alternatively, you can also use a credentials file to authenticate to the services. An example can be found here: https://github.com/elixir-europe/mars-cli/blob/main/tests/test_credentials_example.json
 
 Run the MARS CLI tool to submit the isa-json using credentials file:
 
 ```bash
-python mars_cli.py --development submit --submit-to-metabolights False --submit-to-ena False --credentials-file <path_to_your_credentials_file.json> ../test-data/biosamples-input-isa.json
+python mars_cli.py --development submit --submit-to-metabolights False --submit-to-ena False --credentials-file <path_to_your_credentials_file.json> MARS/test-data/ena-minimal.json
 ```
 
 ### Submit data files and isa-json and to biosamples and ENA
 
 ```bash
-python mars_cli.py --credential-service-name biosamples  --username-credentials <username> --file-transfer ftp --data-files ../data/ENA_data.R1.fastq.gz --submit-to-metabolights False --output final-isa ../data/biosamples-input-isa.json
+python mars_cli.py --credential-service-name biosamples  --username-credentials <username> --file-transfer ftp --data-folder ../data --submit-to-metabolights False --output final-isa ../data/ena-minimal.json
 ```
 
 ### Submit data files and isa-json to Metabolights
@@ -365,7 +392,7 @@ python mars_cli.py --credential-service-name biosamples  --username-credentials 
 Work in progress, currently data transfer is not supported yet.
 
 ```bash
-python mars_cli.py --credential-service-name metabolights  --username-credentials <username> --file-transfer ftp --data-files ../data/metpro-analysis.txt <additional *.mzml data files> --submit-to-biosamples False --submit-to-ena False --output final-isa ../data/metabolights-input-isa.json
+python mars_cli.py --credential-service-name metabolights  --username-credentials <username> --file-transfer ftp --data-folder ../data --submit-to-biosamples False --submit-to-ena False --output final-isa ../data/metabolights-lcms.json
 ```
 
 ## Deploy repository services

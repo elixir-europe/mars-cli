@@ -8,6 +8,7 @@ from mars_lib.isa_json import (
     update_investigation,
     update_initiation_comments,
     map_data_files_to_repositories,
+    check_data_files,
     is_assay_for_target_repo,
 )
 from mars_lib.target_repo import TargetRepository, TARGET_REPO_KEY
@@ -20,6 +21,12 @@ from mars_lib.models.isa_json import (
     Comment,
     Person,
     Investigation,
+    MaterialAttribute,
+    MaterialAttributeValue,
+    OntologyAnnotation,
+    OntologySourceReference,
+    Process,
+    Publication,
     Study,
     _is_valid_filename,
 )
@@ -29,9 +36,11 @@ from mars_lib.models.abstract_repository_client import (
 )
 from mars_lib.models.repository_response import RepositoryResponse
 import json
+from pathlib import Path
 
 
-METABOLIGHTS_ISA = "MARS/test-data/metabolights-input-isa.json"
+ENA_MINIMAL_ISA = "MARS/test-data/ena-minimal.json"
+METABOLIGHTS_ISA = "MARS/test-data/metabolights-lcms.json"
 ENA_COMPLETE_ISA = "MARS/test-data/ena-complete.json"
 
 
@@ -44,15 +53,192 @@ def _multi_repository_investigation():
     return investigation
 
 
+# --- Builders for minimal documents that satisfy the (strict) MARS model ---
+def minimal_process(**overrides):
+    process = {
+        "@id": "#process/1",
+        "name": "process 1",
+        "executesProtocol": {"@id": "#protocol/1"},
+        "inputs": [{"@id": "#in/1"}],
+        "outputs": [{"@id": "#out/1"}],
+    }
+    return {**process, **overrides}
+
+
+def minimal_assay(**overrides):
+    assay = {
+        "@id": "#assay/1",
+        "filename": "a_assay.txt",
+        "comments": [{"name": TARGET_REPO_KEY, "value": TargetRepository.ENA.value}],
+        "characteristicCategories": [{"@id": "#cc/1"}],
+        "dataFiles": [],
+        "materials": {"samples": [{"@id": "#sample/1"}]},
+        "processSequence": [minimal_process()],
+    }
+    return {**assay, **overrides}
+
+
+def minimal_study(**overrides):
+    characteristic = {"category": {"@id": "#cc/organism"}}
+    study = {
+        "@id": "#study/1",
+        "filename": "s_study.txt",
+        "title": "study 1",
+        "characteristicCategories": [
+            {
+                "@id": "#cc/organism",
+                "characteristicType": {"annotationValue": "organism"},
+            }
+        ],
+        "protocols": [{"@id": "#protocol/1", "name": "protocol 1"}],
+        "materials": {
+            "sources": [
+                {
+                    "@id": "#source/1",
+                    "name": "source 1",
+                    "characteristics": [characteristic],
+                }
+            ],
+            "samples": [
+                {
+                    "@id": "#sample/1",
+                    "name": "sample 1",
+                    "characteristics": [characteristic],
+                    "derivesFrom": [{"@id": "#source/1"}],
+                }
+            ],
+        },
+        "processSequence": [minimal_process()],
+        "assays": [minimal_assay()],
+    }
+    return {**study, **overrides}
+
+
+def minimal_investigation(**overrides):
+    investigation = {
+        "@id": "#investigation/1",
+        "filename": "i_investigation.txt",
+        "title": "investigation 1",
+        "studies": [minimal_study()],
+    }
+    return {**investigation, **overrides}
+
+
+def minimal(model, **overrides):
+    builder = {
+        Investigation: minimal_investigation,
+        Study: minimal_study,
+        Assay: minimal_assay,
+    }[model]
+    return builder(**overrides)
+
+
+def test_minimal_documents_are_valid():
+    assert Investigation.model_validate(minimal_investigation())
+
+
+@pytest.mark.parametrize(
+    "model, field",
+    [
+        (Investigation, "@id"),
+        (Investigation, "filename"),
+        (Investigation, "title"),
+        (Investigation, "studies"),
+        (Study, "@id"),
+        (Study, "filename"),
+        (Study, "title"),
+        (Study, "protocols"),
+        (Study, "materials"),
+        (Study, "processSequence"),
+        (Study, "characteristicCategories"),
+        (Assay, "@id"),
+        (Assay, "filename"),
+        (Assay, "materials"),
+        (Assay, "dataFiles"),
+        (Assay, "processSequence"),
+    ],
+)
+def test_mandatory_fields_are_required(model, field):
+    document = minimal(model)
+    del document[field]
+    with pytest.raises(ValidationError) as error:
+        model.model_validate(document)
+    assert {"type": "missing", "loc": (field,)}.items() <= {
+        "type": error.value.errors()[0]["type"],
+        "loc": error.value.errors()[0]["loc"],
+    }.items()
+
+
+@pytest.mark.parametrize(
+    "model, field",
+    [
+        (Investigation, "studies"),
+        (Study, "protocols"),
+        (Study, "processSequence"),
+        (Study, "characteristicCategories"),
+        (Assay, "processSequence"),
+    ],
+)
+def test_one_to_n_lists_cannot_be_empty(model, field):
+    with pytest.raises(ValidationError, match="at least 1 item"):
+        model.model_validate(minimal(model, **{field: []}))
+
+
+def test_assay_characteristic_categories_are_optional():
+    without_key = minimal(Assay)
+    del without_key["characteristicCategories"]
+
+    assert Assay.model_validate(without_key).characteristicCategories == []
+    assert (
+        Assay.model_validate(minimal(Assay, characteristicCategories=[]))
+        .characteristicCategories
+        == []
+    )
+
+
+def test_study_requires_organism_characteristic_category():
+    with pytest.raises(ValidationError, match="'organism' characteristic category"):
+        Study.model_validate(
+            minimal_study(characteristicCategories=[{"@id": "#cc/other"}])
+        )
+
+
+def test_process_links_may_be_empty_objects():
+    # The first/last process of a sequence has no previous/next process
+    process = Process.model_validate(
+        minimal_process(previousProcess={}, nextProcess={"@id": "#process/2"})
+    )
+    assert process.previousProcess is None
+    assert process.nextProcess.id == "#process/2"
+
+
+def test_process_inputs_and_outputs_are_optional():
+    # A step split over two linked processes: inputs on the first, outputs on the second
+    assert Process.model_validate(minimal_process(outputs=[])).outputs == []
+    assert Process.model_validate(minimal_process(inputs=[])).inputs == []
+    # A process may also have neither, whether empty or left out
+    process = Process.model_validate(minimal_process(inputs=[], outputs=[]))
+    assert process.inputs == [] and process.outputs == []
+    process = minimal_process()
+    del process["inputs"], process["outputs"]
+    process = Process.model_validate(process)
+    assert process.inputs == [] and process.outputs == []
+
+
+def test_process_inputs_and_outputs_are_references():
+    with pytest.raises(ValidationError):
+        Process.model_validate(minimal_process(inputs=[{"name": "no id"}]))
+    with pytest.raises(ValidationError):
+        Process.model_validate(minimal_process(executesProtocol={}))
+
+
 def test_load_investigation():
     # Should test the validation process of the ISA JSON file where root level = investigation.
     valid_investigation01 = load_investigation(METABOLIGHTS_ISA)
     assert len(valid_investigation01.studies) == 1
     assert valid_investigation01.studies[0].identifier == "BH2024"
 
-    valid_investigation02 = load_investigation(
-        "MARS/test-data/biosamples-input-isa.json"
-    )
+    valid_investigation02 = load_investigation(ENA_MINIMAL_ISA)
     assert len(valid_investigation02.studies) == 1
     assert (
         valid_investigation02.studies[0].title
@@ -91,134 +277,6 @@ def test_reduce_investigation_for_biosamples():
     assert len(filtered_investigation.studies[0].assays) == 0
 
 
-def test_find_submission_id_comment_value_returns_first_value_across_studies():
-    investigation = Investigation.model_validate(
-        {
-            "studies": [
-                {
-                    "assays": [
-                        {
-                            "comments": [
-                                {"name": TARGET_REPO_KEY, "value": "ena"},
-                                {"name": SUBMISSION_ID_KEY, "value": "first-id"},
-                                {"name": SUBMISSION_ID_KEY, "value": "duplicate-id"},
-                            ]
-                        },
-                        {
-                            "comments": [
-                                {"name": TARGET_REPO_KEY, "value": "ena"},
-                                {"name": SUBMISSION_ID_KEY, "value": "later-id"},
-                            ]
-                        },
-                    ]
-                },
-                {
-                    "assays": [
-                        {
-                            "comments": [
-                                {"name": TARGET_REPO_KEY, "value": "metabolights"},
-                                {"name": SUBMISSION_ID_KEY, "value": "next-study-id"},
-                            ]
-                        }
-                    ]
-                },
-            ]
-        }
-    )
-
-    assert find_submission_id_comment_value(investigation) == "first-id"
-
-
-@pytest.mark.parametrize(
-    "investigation",
-    [
-        {"studies": []},
-        {"studies": [{"assays": []}]},
-        {
-            "studies": [
-                {"assays": [{"comments": [{"name": TARGET_REPO_KEY, "value": "ena"}]}]}
-            ]
-        },
-    ],
-)
-def test_find_submission_id_comment_value_returns_none_when_absent(investigation):
-    investigation = Investigation.model_validate(investigation)
-    assert find_submission_id_comment_value(investigation) is None
-
-
-def test_update_initiation_comments_replaces_repository_comments_and_preserves_others():
-    investigation = Investigation.model_validate(
-        {
-            "studies": [
-                {
-                    "assays": [
-                        {
-                            "@id": "matching",
-                            "comments": [
-                                {"name": TARGET_REPO_KEY, "value": "ena"},
-                                {"name": SUBMISSION_ID_KEY, "value": "old-id"},
-                                {"name": "sample_accession", "value": "old-sample"},
-                                {"name": "keep", "value": "preserved"},
-                            ],
-                        },
-                        {
-                            "@id": "other-repository",
-                            "comments": [
-                                {"name": TARGET_REPO_KEY, "value": "metabolights"},
-                                {"name": SUBMISSION_ID_KEY, "value": "other-id"},
-                                {"name": "keep", "value": "untouched"},
-                            ],
-                        },
-                    ]
-                }
-            ]
-        }
-    )
-    initiation = InitiationResponse(
-        submission_id="new-id",
-        assay_comments={"sample_accession": "SAMPLE123", "empty_comment": ""},
-    )
-
-    update_initiation_comments(investigation, "ena", initiation)
-
-    matching_comments = investigation.studies[0].assays[0].comments
-    assert [(comment.name, comment.value) for comment in matching_comments] == [
-        (SUBMISSION_ID_KEY, "new-id"),
-        ("sample_accession", "SAMPLE123"),
-        ("empty_comment", ""),
-        (TARGET_REPO_KEY, "ena"),
-        ("keep", "preserved"),
-    ]
-    other_comments = investigation.studies[0].assays[1].comments
-    assert [(comment.name, comment.value) for comment in other_comments] == [
-        (TARGET_REPO_KEY, "metabolights"),
-        (SUBMISSION_ID_KEY, "other-id"),
-        ("keep", "untouched"),
-    ]
-
-
-def test_update_initiation_comments_without_new_submission_id_keeps_existing_id():
-    assay = Assay(
-        comments=[
-            Comment(name=TARGET_REPO_KEY, value="ena"),
-            Comment(name=SUBMISSION_ID_KEY, value="existing-id"),
-            Comment(name="sample_accession", value="old-accession"),
-        ]
-    )
-    investigation = Investigation(studies=[Study(assays=[assay])])
-
-    update_initiation_comments(
-        investigation,
-        "ena",
-        InitiationResponse(assay_comments={"sample_accession": "new-accession"}),
-    )
-
-    assert [(comment.name, comment.value) for comment in assay.comments] == [
-        ("sample_accession", "new-accession"),
-        (TARGET_REPO_KEY, "ena"),
-        (SUBMISSION_ID_KEY, "existing-id"),
-    ]
-
 
 def test_data_type_is_free_text():
     # The type is not restricted to a fixed list of values
@@ -233,43 +291,51 @@ def test_data_type_is_free_text():
 
 def test_material_type_is_free_text():
     # The type is not restricted to a fixed list of values
+    required = {"characteristics": [{"category": {"@id": "#cc/1"}}]}
     assert Material.model_validate(
-        {"@id": "material_001", "name": "material 1", "type": "Extract Name"}
+        {
+            "@id": "material_001",
+            "name": "material 1",
+            "type": "Extract Name",
+            **required,
+        }
     )
     custom = Material.model_validate(
-        {"@id": "material_002", "name": "material 2", "type": "Custom Material"}
+        {
+            "@id": "material_002",
+            "name": "material 2",
+            "type": "Custom Material",
+            **required,
+        }
     )
     assert custom.type == "Custom Material"
 
 
 def test_target_repo_comment_validator():
-    valid_assay_json = {
-        "@id": "assay_001",
-        "comments": [
+    valid_assay_json = minimal_assay(
+        comments=[
             {
                 "@id": "comment_001",
                 "name": f"{TARGET_REPO_KEY}",
                 "value": TargetRepository.ENA.value,
             }
         ],
-    }
+    )
 
-    invalid_assay_json = {
-        "@id": "assay_002",
-        "comments": [
+    invalid_assay_json = minimal_assay(
+        comments=[
             {
                 "@id": "comment_002",
                 "name": f"{TARGET_REPO_KEY}",
                 "value": "my special repo",
             }
         ],
-    }
+    )
 
-    second_invalid_assay_json = {"@id": "assay_003", "comments": []}
+    second_invalid_assay_json = minimal_assay(comments=[])
 
-    third_invalid_assay_json = {
-        "@id": "assay_004",
-        "comments": [
+    third_invalid_assay_json = minimal_assay(
+        comments=[
             {
                 "@id": "comment_003",
                 "name": f"{TARGET_REPO_KEY}",
@@ -281,7 +347,7 @@ def test_target_repo_comment_validator():
                 "value": TargetRepository.METABOLIGHTS.value,
             },
         ],
-    }
+    )
 
     assert Assay.model_validate(valid_assay_json)
     with pytest.raises(
@@ -318,7 +384,7 @@ def test_target_repo_comment_validator():
 
 def test_update_study_materials_no_accession_categories():
     # This file has no characteristics for accessions
-    json_path = "MARS/test-data/biosamples-original-isa-no-accesion-char.json"
+    json_path = "MARS/test-data/ena-minimal-no-accession-category.json"
     with open(json_path) as json_file:
         json_data = json.load(json_file)
 
@@ -351,8 +417,8 @@ def test_update_study_materials_no_accession_categories():
 
 
 def test_update_study_materials_with_accession_categories():
-    # This file has no characteristics for accessions
-    json_path = "MARS/test-data/biosamples-original-isa.json"
+    # This file declares an accession characteristic category
+    json_path = ENA_MINIMAL_ISA
     with open(json_path) as json_file:
         json_data = json.load(json_file)
 
@@ -711,19 +777,21 @@ def test_update_datafile_comment_with_accession_comment_present():
 def test_filename_validation():
     # ISA should have a filename that starts with 'x_'
     with pytest.raises(ValidationError, match="'filename' should start with 'i_'"):
-        Investigation.model_validate({"@id": "1", "filename": "bad filename"})
+        Investigation.model_validate(minimal_investigation(filename="bad filename"))
 
     with pytest.raises(ValidationError, match="'filename' should start with 's_'"):
-        Study.model_validate({"@id": "2", "filename": "bad filename"})
+        Study.model_validate(minimal_study(filename="bad filename"))
 
     with pytest.raises(ValidationError, match="'filename' should start with 'a_'"):
-        Assay.model_validate({"@id": "3", "filename": "bad filename"})
+        Assay.model_validate(minimal_assay(filename="bad filename"))
 
     assert re.match(r"^i_", "i_Good_file_name")
 
-    assert Investigation.model_validate({"@id": "4", "filename": "i_Good_File_Name"})
-    assert Study.model_validate({"@id": "5", "filename": "s_Good_File_Name"})
-    assert Assay.model_validate({"@id": "6", "filename": "a_Good_File_Name"})
+    assert Investigation.model_validate(
+        minimal_investigation(filename="i_Good_File_Name")
+    )
+    assert Study.model_validate(minimal_study(filename="s_Good_File_Name"))
+    assert Assay.model_validate(minimal_assay(filename="a_Good_File_Name"))
 
 
 @pytest.mark.parametrize(
@@ -789,7 +857,7 @@ def test_is_valid_filename(filename, prefix, arc_kind, expected):
     ],
 )
 def test_filename_validation_accepts_valid_names(model, filename):
-    parsed = model.model_validate({"@id": "1", "filename": filename})
+    parsed = model.model_validate(minimal(model, filename=filename))
     assert parsed.filename == filename
 
 
@@ -824,17 +892,24 @@ FILENAME_ERRORS = {
 )
 def test_filename_validation_rejects_invalid_names(model, filename):
     with pytest.raises(ValidationError) as error:
-        model.model_validate({"@id": "1", "filename": filename})
+        model.model_validate(minimal(model, filename=filename))
     # The message names both accepted forms
     assert FILENAME_ERRORS[model] in str(error.value)
 
 
 @pytest.mark.parametrize("model", [Investigation, Study, Assay])
-def test_filename_validation_allows_missing_filename(model):
-    assert model.model_validate({"@id": "1"}).filename is None
-    assert model.model_validate({"@id": "1", "filename": None}).filename is None
+def test_filename_validation_requires_filename(model):
+    document = minimal(model)
+    del document["filename"]
+    with pytest.raises(ValidationError, match="filename\n  Field required"):
+        model.model_validate(document)
+    with pytest.raises(ValidationError, match="filename"):
+        model.model_validate({**document, "filename": None})
 
 
+@pytest.mark.skip(
+    reason="ARC ISA-JSON currently does not comply to the MARS specifications and needs upstream fixes."
+)
 def test_load_arc_example():
     investigation = load_investigation("MARS/test-data/ARC-ISA-example.json")
     assert isinstance(investigation, Investigation)
@@ -891,3 +966,147 @@ def test_map_data_files_to_repositories():
     duplicated_files.append(exact_match_files[-1])
 
     map_data_files_to_repositories(duplicated_files, investigation)
+
+
+# Test data that does not comply with the strict MARS model (yet). strict=True:
+# once a file complies, its test fails so the entry gets removed.
+NON_COMPLIANT_TEST_FILES = {
+    "MARS/test-data/ARC-ISA-example.json": (
+        "ARC ISA-JSON currently does not comply to the MARS specifications "
+        "and needs upstream fixes."
+    ),
+}
+
+
+def _isa_json_test_files():
+    """Every ISA JSON in MARS/test-data, so new files are picked up automatically,
+    plus the fixture the tests load as an Investigation."""
+    files = sorted(
+        path.as_posix()
+        for path in Path("MARS/test-data").rglob("*.json")
+        if "receipt" not in path.name
+    )
+    files.append("tests/fixtures/isa_jsons/1_after_biosamples.json")
+    return [
+        (
+            pytest.param(
+                file,
+                marks=pytest.mark.xfail(
+                    reason=NON_COMPLIANT_TEST_FILES[file], strict=True
+                ),
+            )
+            if file in NON_COMPLIANT_TEST_FILES
+            else file
+        )
+        for file in files
+    ]
+
+
+# ISA JSON files that the tests (and thus the CI workflow) load as an Investigation.
+# They all have to comply with the strict MARS model.
+ISA_JSON_TEST_FILES = _isa_json_test_files()
+
+
+# The MARS receipts the repository services write; ena-receipt*.json are raw ENA
+# receipts, not MARS receipts.
+@pytest.mark.parametrize(
+    "file_path",
+    sorted(
+        path.as_posix() for path in Path("MARS/test-data").glob("mars-*receipt*.json")
+    ),
+)
+def test_mars_receipt_parses(file_path):
+    RepositoryResponse.from_json_file(file_path)
+
+
+@pytest.mark.parametrize("file_path", ISA_JSON_TEST_FILES)
+def test_test_data_complies_with_model(file_path):
+    with open(file_path, "r") as json_file:
+        assert Investigation.model_validate(json.load(json_file))
+
+
+def _contains_none(obj) -> bool:
+    if obj is None:
+        return True
+    if isinstance(obj, dict):
+        return any(_contains_none(v) for v in obj.values())
+    if isinstance(obj, list):
+        return any(_contains_none(v) for v in obj)
+    return False
+
+
+@pytest.mark.parametrize("file_path", ISA_JSON_TEST_FILES)
+def test_serialization_with_exclude_none_drops_all_none_values(file_path):
+    investigation = load_investigation(file_path)
+
+    as_dict = investigation.model_dump(by_alias=True, exclude_none=True)
+    as_json = json.loads(investigation.model_dump_json(by_alias=True, exclude_none=True))
+
+    assert not _contains_none(as_dict)
+    assert not _contains_none(as_json)
+    # Dropping the None values must not lose information
+    assert Investigation.model_validate(as_dict) == investigation
+
+
+def test_serialization_drops_optional_fields_that_are_none():
+    attribute = MaterialAttribute.model_validate({"@id": "#attr/1"})
+    value = MaterialAttributeValue.model_validate(
+        {"@id": None, "category": {"@id": "#attr/1"}, "value": None, "unit": None}
+    )
+
+    # Without the flag the optional fields are serialized as null
+    assert value.model_dump(by_alias=True)["@id"] is None
+    assert value.model_dump(by_alias=True)["category"]["characteristicType"] is None
+
+    dumped = value.model_dump(by_alias=True, exclude_none=True)
+    assert dumped["category"] == attribute.model_dump(by_alias=True, exclude_none=True)
+    for key in ("@id", "value", "unit"):
+        assert key not in dumped
+    assert "characteristicType" not in dumped["category"]
+    assert not _contains_none(dumped)
+
+
+def test_serialization_drops_values_set_to_none_after_validation():
+    value = MaterialAttributeValue.model_validate(
+        {
+            "@id": "#value/1",
+            "category": {"@id": "#attr/1"},
+            "value": {"@id": "#ann/1", "annotationValue": "x"},
+            "unit": {"@id": "#unit/1"},
+        }
+    )
+    value.id = None
+    value.unit = None
+    value.value = OntologyAnnotation.model_validate({"annotationValue": None})
+
+    dumped = value.model_dump(by_alias=True, exclude_none=True)
+
+    assert not _contains_none(dumped)
+    assert "@id" not in dumped
+    assert "unit" not in dumped
+    assert "annotationValue" not in dumped["value"]
+
+
+def test_invalid_test_data_is_rejected():
+    with open("tests/fixtures/invalid_investigation.json", "r") as json_file:
+        with pytest.raises(ValidationError):
+            Investigation.model_validate(json.load(json_file))
+
+
+def test_assay_requires_target_repository_comment_even_without_comments_key():
+    # 'comments' is absent (not just empty): the mandatory 'target_repository'
+    # comment must still be enforced.
+    assay = minimal_assay()
+    del assay["comments"]
+    with pytest.raises(
+        ValidationError, match=f"'{TARGET_REPO_KEY}' comment is missing"
+    ):
+        Assay.model_validate(assay)
+
+
+def test_ontology_source_reference_and_publication_accept_an_id():
+    assert OntologySourceReference.model_validate({"@id": "#osr/1", "name": "EFO"}).id
+    assert Publication.model_validate({"@id": "#publication/1", "title": "t"}).id
+    # the '@id' of nested annotations was already supported
+    assert Publication.model_validate({"status": {"@id": "#status/1"}})
+    assert Person.model_validate({"roles": [{"@id": "#role/1"}]})

@@ -14,7 +14,6 @@ dependencies = [
     "retry",
     "colorlog",
     "dotenv>=0.9.9",
-    "mtblspy",
 ]
 
 [project.urls]
@@ -54,6 +53,3 @@ mars_lib = ["*.json"]
 [tool.ruff.lint]
 # Keep the rule set the project was linted with before ruff widened its defaults
 select = ["E4", "E7", "E9", "F"]
-
-[tool.uv.sources]
-mtblspy = { git = "https://github.com/EBI-Metabolights/mtblspy.git" }

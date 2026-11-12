@@ -1,16 +1,15 @@
 import io
-from pathlib import Path
-import tempfile
-from typing import Any
+import time
 from urllib.parse import urlencode
 
 import requests
 
+import logging
 from mars_lib.models.abstract_repository_client import (
     AuthError,
     BaseRepositoryClient,
-    FtpCredentials,
     InitiationResponse,
+    RepositoryClientError,
     RepositoryConfig,
     RepositoryConfigError,
     RepositoryInitiationError,
@@ -20,10 +19,8 @@ from mars_lib.models.abstract_repository_client import (
 )
 from mars_lib.models.isa_json import Investigation
 from mars_lib.models.repository_response import RepositoryResponse
-from mtblspy.commands.submissions.client import SubmissionClient
-from mtblspy.commands.submissions.models import (
-    StudyCreationRequest,
-)
+
+logger = logging.getLogger(__name__)
 
 
 class MetaboLightsRepositoryClient(BaseRepositoryClient):
@@ -58,12 +55,16 @@ class MetaboLightsRepositoryClient(BaseRepositoryClient):
         if not settings:
             errors.append(f"Settings are not defined for {label}")
         else:
+            if not settings.get("url"):
+                errors.append(f"url is not defined for {label}")
             if not settings.get("auth-url"):
                 errors.append(f"auth-url is not defined for {label}")
             if not settings.get("auth-client-name"):
                 errors.append(f"auth-client-name is not defined for {label}")
-            # if not settings.get("submission-base-url"):
-            #     errors.append(f"auth-submission-base-url is not defined for {label}")
+            if not settings.get("initiation-url"):
+                errors.append(f"initiation-url is not defined for {label}")
+            if not settings.get("submission-url"):
+                errors.append(f"submission-url is not defined for {label}")
 
         return errors or None
 
@@ -152,57 +153,43 @@ class MetaboLightsRepositoryClient(BaseRepositoryClient):
             raise RepositorySubmissionError(
                 "Token is required for MetaboLights Submission"
             )
+
         submission_id = context.submission_id
+
         settings = context.repository_config.settings
-        base_url = settings.get("submission-base-url")
-        client = SubmissionClient(base_url=base_url)
-        if not submission_id:
-            issuer = settings.get("auth-issuer")
-            client = SubmissionClient(base_url=base_url)
-            client.login_with_jwt(
-                jwt_token=repository_token.token,
-                refresh_token=repository_token.refresh_token,
-                issuer=issuer,
+        initiation_url = settings.get("initiation-url")
+        headers = {
+            "accept": "application/json",
+            "Authorization": f"Bearer {repository_token.token}",
+        }
+        files = None
+        if submission_id:
+            headers["submission-id"] = submission_id
+        else:
+            if not context.filtered_investigation:
+                raise RepositorySubmissionError("Input ISA-JSON is not defined")
+            investigation_str = context.filtered_investigation.model_dump_json(
+                by_alias=True, exclude_none=True
             )
-            study_category, assay_type = self._identify_study_category(context)
-            new_submission_request = StudyCreationRequest(
-                selected_study_categories={study_category: [assay_type]},
-                title="MetaboLights study requested by MARS client",
-                description="MetaboLights study requested by MARS client",
-                selected_submission_workflows=["mars"],
-                dataset_license_agreement=True,
-                dataset_policy_agreement=True,
-            )
-            temp_file = tempfile.NamedTemporaryFile("w")
-            try:
-                temp_file.write(new_submission_request.model_dump_json(by_alias=True))
-                temp_file.file.flush()
+            json_file = io.StringIO(investigation_str)
 
-                response_json = client.create_study(input_file_path=temp_file.name)
-                if response_json:
-                    studies = response_json.get("studies", {})
-                    if studies:
-                        submission_id = list(studies.keys())[0]
-            finally:
-                if Path(temp_file.name).exists():
-                    Path(temp_file.name).unlink()
-
-            if not submission_id:
-                raise RepositorySubmissionError(
-                    "Submission id is not defined or created for the study"
-                )
-
-        details = client.get_private_ftp_credentials(study_id=submission_id)
-
-        return InitiationResponse(
-            submission_id=submission_id,
-            ftp_credentials=FtpCredentials(
-                host=details.ftp_host,
-                username=details.ftp_user,
-                password=details.ftp_password,
-                upload_path=details.ftp_folder,
-            ),
+            files = {"isa_json_file": ("isa_json.json", json_file)}
+        response = requests.post(
+            initiation_url,
+            headers=headers,
+            files=files,
+            timeout=60,
         )
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as ex:
+            response_content = response.content.decode("utf-8")
+            raise AuthError(
+                "ERROR when generating MetaboLights token. "
+                f"Status: {response.status_code}. Response content:\n{response_content}"
+            ) from ex
+        response_dict = response.json()
+        return InitiationResponse.model_validate(response_dict)
 
     def _identify_study_category(self, context: SubmissionContext):
         assay_technologies = set()
@@ -258,11 +245,16 @@ class MetaboLightsRepositoryClient(BaseRepositoryClient):
             raise RepositorySubmissionError(
                 "Token is required for MetaboLights Submission"
             )
+        submission_id = context.submission_id
+        if not submission_id:
+            raise RepositorySubmissionError("submission-id is required")
+
         token = repository_token.token
         submission_url = context.repository_config.settings.get("submission-url")
         headers = {
             "accept": "application/json",
             "Authorization": f"Bearer {token}",
+            "submission-id": submission_id,
         }
 
         investigation_str = context.filtered_investigation.model_dump_json(
@@ -271,103 +263,47 @@ class MetaboLightsRepositoryClient(BaseRepositoryClient):
         json_file = io.StringIO(investigation_str)
 
         files = {"isa_json_file": ("isa_json.json", json_file)}
+        response: None | RepositoryResponse = None
         try:
-            submission_response = requests.post(
+            submission_response = requests.put(
                 submission_url,
                 headers=headers,
                 files=files,
                 timeout=120,
             )
             submission_response.raise_for_status()
-            if submission_response.json().get("errors", []):
-                response_body = submission_response.request.body
-                if isinstance(response_body, bytes):
-                    response_body = response_body.decode("utf-8")
-                raise requests.HTTPError(
-                    "Request towards MetaboLights failed!\n"
-                    f"Request:\n"
-                    f"Method:{submission_response.request.method}\n"
-                    f"Status:{submission_response.status_code}\n"
-                    f"URL:{submission_response.request.url}\n"
-                    f"Headers:{submission_response.request.headers}\n"
-                    f"Body:{response_body}"
-                )
 
-            submission_response.json()
+            response = RepositoryResponse.model_validate(submission_response.json())
+
         except Exception as exc:
             raise RepositorySubmissionError(self.repository_name, str(exc))
+        result: None | RepositoryResponse = None
+        try:
+            headers["task-id"] = response.task_id
+            submission_poll_url = context.repository_config.settings.get(
+                "submission-poll-url"
+            )
+            for _ in range(context.submission_max_retry):
+                submission_response = requests.get(
+                    submission_poll_url,
+                    headers=headers,
+                    timeout=10,
+                )
+                submission_response.raise_for_status()
 
-        # validation_url = self.find_value_in_info_section(
-        #     "validation-url", result["info"]
-        # )
-        # validation_status_url = self.find_value_in_info_section(
-        #     "validation-status-url", result["info"]
-        # )
-        # ftp_credentials_url = self.find_value_in_info_section(
-        #     "ftp-credentials-url", result["info"]
-        # )
-
-        # transfer_config = context.data_file_transfer_config
-        # if transfer_config and transfer_config.data_file_paths:
-        #     protocol = transfer_config.transfer_protocol
-        #     if protocol != "ftp":
-        #         raise RepositorySubmissionError(
-        #             f"Data upload protocol {protocol} is not supported"
-        #         )
-
-        #     ftp_credentials_response = requests.get(
-        #         ftp_credentials_url, headers=headers
-        #     )
-        #     ftp_credentials_response.raise_for_status()
-        #     ftp_credentials = ftp_credentials_response.json()
-        #     uploader = FTPUploader(
-        #         ftp_credentials["ftpHost"],
-        #         ftp_credentials["ftpUser"],
-        #         ftp_credentials["ftpPassword"],
-        #     )
-        #     uploader.upload(
-        #         transfer_config.data_file_paths,
-        #         target_location=ftp_credentials["ftpPath"],
-        #     )
-
-        # validation_response = requests.post(validation_url, headers=headers)
-        # validation_response.raise_for_status()
-        # pool_time_in_seconds = 10
-        # max_pool_count = 100
-        # validation_status_response = None
-        # for _ in range(max_pool_count):
-        #     timeout = False
-        #     try:
-        #         validation_status_response = requests.get(
-        #             validation_status_url, headers=headers, timeout=30
-        #         )
-        #         validation_status_response.raise_for_status()
-        #     except requests.exceptions.Timeout:
-        #         timeout = True
-        #     if not timeout:
-        #         if validation_status_response is None:
-        #             raise ValueError("Validation status response is None")
-        #         validation_status = validation_status_response.json()
-        #         validation_time = self.find_value_in_info_section(
-        #             "validation-time", validation_status["info"], fail_gracefully=True
-        #         )
-        #         if validation_time:
-        #             break
-        #     time.sleep(pool_time_in_seconds)
-        # else:
-        #     raise ValueError(f"Validation failed after {max_pool_count} iterations")
-
-        # if validation_status_response:
-        #     return validation_status_response
-
-        # raise ValueError("Submission failed for MetaboLights")
-
-    def find_value_in_info_section(
-        self, key: str, info_section: list[Any], fail_gracefully: bool = False
-    ) -> Any:
-        for info in info_section:
-            if info["name"] == key:
-                return info["message"]
-        if fail_gracefully:
-            return None
-        raise ValueError(f"Name {key} not found in info section")
+                response = RepositoryResponse.model_validate(submission_response.json())
+                status = response.submission_status
+                if status != "PENDING":
+                    result = response
+                    break
+                time.sleep(context.submission_retry_period_in_seconds)
+            if not result:
+                raise RepositorySubmissionError(
+                    self.repository_name,
+                    "Retries reach to maximum submission retry count",
+                )
+            return result
+        except RepositoryClientError as ex:
+            raise ex
+        except Exception as exc:
+            raise RepositorySubmissionError(self.repository_name, str(exc))
