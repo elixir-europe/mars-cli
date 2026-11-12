@@ -10,6 +10,7 @@ from mars_lib.models.isa_json import (
     Comment,
     MaterialAttribute,
     MaterialAttributeValue,
+    Process,
     Study,
     OntologyAnnotation,
     Data as DataFile,
@@ -73,9 +74,10 @@ def remove_unused_study_resources(study: Study) -> None:
     in place. The assays' process sequences link the resources together:
     - samples and other materials that are not an input of a process in an assay;
     - sources that are not an input of a study process that produces one of the
-      remaining samples;
-    - protocols that are not executed by a process in an assay, or by a study process
-      that produces one of the remaining samples;
+      remaining samples (or of a process it links back to, see
+      `_linked_previous_processes`);
+    - protocols that are not executed by a process in an assay, or by one of those
+      study processes;
     - study processes that execute one of the removed protocols.
 
     Args:
@@ -104,6 +106,7 @@ def remove_unused_study_resources(study: Study) -> None:
         for process in study.processSequence
         if any(output.id in sample_ids for output in process.outputs)
     ]
+    study_processes += _linked_previous_processes(study, study_processes)
     source_ids = {input.id for process in study_processes for input in process.inputs}
     study.materials.sources = [
         source for source in study.materials.sources if source.id in source_ids
@@ -123,6 +126,34 @@ def remove_unused_study_resources(study: Study) -> None:
         for process in study.processSequence
         if process.executesProtocol.id in protocol_ids
     ]
+
+
+def _linked_previous_processes(study: Study, processes: list[Process]) -> list[Process]:
+    """
+    A step can be split over linked processes, e.g. one with only the source as input and
+    one with only the sample as output. For every process without inputs, follows the
+    'previousProcess' links back until a process with inputs is reached.
+
+    Args:
+        study (Study): The study that holds the processes.
+        processes (list[Process]): The study processes to start from.
+
+    Returns:
+        list[Process]: The study processes that were reached through the links.
+    """
+    processes_by_id = {process.id: process for process in study.processSequence}
+    linked_processes = []
+    for process in processes:
+        seen = {process.id}
+        while not process.inputs and process.previousProcess is not None:
+            previous = processes_by_id.get(process.previousProcess.id)
+            # Stop at a link to a process outside the study, or a cycle
+            if previous is None or previous.id in seen:
+                break
+            seen.add(previous.id)
+            linked_processes.append(previous)
+            process = previous
+    return linked_processes
 
 
 def detect_target_repo_comment(comments: list[Comment]) -> Comment:

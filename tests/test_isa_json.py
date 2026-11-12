@@ -38,6 +38,12 @@ METABOLIGHTS_ISA = "MARS/test-data/metabolights-lcms.json"
 ENA_COMPLETE_ISA = "MARS/test-data/ena-complete.json"
 # One study with an ENA and a MetaboLights assay, that each use another sample
 HOLOFOOD_ISA = "MARS/test-data/HoloFoodinISA_v1.0.json"
+# Every sampling step is split over two linked processes: one with only the source as
+# input, and one with only the sample as output
+PTX_ISA = (
+    "MARS/test-data/ISA-PTX-TEST/isajson/"
+    "i_investigation_PTX_Pilot_Daphnia_magna_valid.json"
+)
 
 
 def _multi_repository_investigation():
@@ -484,6 +490,70 @@ def test_reduce_investigation_keeps_study_processes_of_remaining_protocols():
         "#process/sample_collection/3065",
         "#process/sample_collection/3066",
     ]
+
+
+def test_reduce_investigation_follows_previous_process_without_inputs():
+    # The collection of sample 3066 (ENA) is split over two linked processes: one that
+    # takes the source and runs its own protocol, and one that produces the sample
+    investigation = load_investigation(HOLOFOOD_ISA)
+    study = investigation.studies[0]
+    study.protocols.append(
+        study.protocols[0].model_copy(
+            update={"id": "#protocol/pre_collection", "name": "pre collection"}
+        )
+    )
+    collection_3065, collection_3066 = study.processSequence
+    first_half = collection_3066.model_copy(
+        update={
+            "id": "#process/split/1",
+            "executesProtocol": IsaReference.model_validate(
+                {"@id": "#protocol/pre_collection"}
+            ),
+            "outputs": [],
+            "nextProcess": IsaReference.model_validate({"@id": "#process/split/2"}),
+        }
+    )
+    second_half = collection_3066.model_copy(
+        update={
+            "id": "#process/split/2",
+            "inputs": [],
+            "previousProcess": IsaReference.model_validate({"@id": "#process/split/1"}),
+        }
+    )
+    study.processSequence = [collection_3065, first_half, second_half]
+
+    ena = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    ).studies[0]
+    metabolights = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS.value
+    ).studies[0]
+
+    assert _ids(ena.materials.sources) == ["#source/3064"]
+    assert "#protocol/pre_collection" in _ids(ena.protocols)
+    assert {"#process/split/1", "#process/split/2"} <= set(_ids(ena.processSequence))
+    assert "#protocol/pre_collection" not in _ids(metabolights.protocols)
+    assert "#process/split/1" not in _ids(metabolights.processSequence)
+
+
+@pytest.mark.parametrize(
+    "target_repo", [TargetRepository.ENA.value, TargetRepository.METABOLIGHTS.value]
+)
+def test_reduce_investigation_keeps_sources_of_linked_processes_in_ptx(target_repo):
+    investigation = load_investigation(PTX_ISA)
+    original = investigation.studies[0]
+    # The protocol of the first halves, that take the sources
+    source_protocol_ids = {
+        process.executesProtocol.id
+        for process in original.processSequence
+        if process.inputs
+    }
+
+    study = reduce_investigation_for_target_repo(investigation, target_repo).studies[0]
+
+    assert _ids(study.materials.sources) == _ids(original.materials.sources)
+    assert source_protocol_ids <= set(_ids(study.protocols))
+    assert _ids(study.processSequence) == _ids(original.processSequence)
 
 
 def test_data_type_is_free_text():
