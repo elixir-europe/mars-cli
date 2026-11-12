@@ -126,6 +126,10 @@ def submission(
     ):
         raise ValueError("No target repository selected.")
 
+    # Abort before submitting anything when a target repository has nothing to receive
+    for repo in target_repositories:
+        reduce_investigation_for_target_repo(investigation, repo)
+
     if TargetRepository.BIOSAMPLES.value in target_repositories:
         # Submit to Biosamples
         biosamples_result = submit_to_biosamples(
@@ -298,7 +302,7 @@ def upload_to_metabolights(
         "Authorization": f"Bearer {token}",
     }
     investigation_str = reduce_investigation_for_target_repo(
-        investigation, TargetRepository.METABOLIGHTS
+        investigation, TargetRepository.METABOLIGHTS.value
     ).model_dump_json(by_alias=True, exclude_none=True)
     json_file = io.StringIO(investigation_str)
 
