@@ -40,10 +40,7 @@ ENA_COMPLETE_ISA = "MARS/test-data/ena-complete.json"
 HOLOFOOD_ISA = "MARS/test-data/HoloFoodinISA_v1.0.json"
 # Every sampling step is split over two linked processes: one with only the source as
 # input, and one with only the sample as output
-PTX_ISA = (
-    "MARS/test-data/ISA-PTX-TEST/isajson/"
-    "i_investigation_PTX_Pilot_Daphnia_magna_valid.json"
-)
+PTX_ISA = "MARS/test-data/i_investigation_PTX_Pilot_Daphnia_magna_valid.json"
 
 
 def _multi_repository_investigation():

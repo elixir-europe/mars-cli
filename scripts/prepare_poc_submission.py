@@ -6,7 +6,7 @@ Prepare the PoC environments for MARS-CLI (no pytest, no run script):
 - Generate an ISA-JSON from each configured template, where:
     * dataFiles entries are updated to point to UNIQUE generated files while
       preserving their original extensions
-    * 'file name', 'file type', 'file checksum', 'checksum_method'
+    * 'filename', 'filetype', 'checksum', 'checksum_method'
       comments are updated accordingly (MD5 over the .fastq.gz)
 - Create poc_work/credentials.json from environment variables
 
