@@ -14,6 +14,7 @@ from mars_lib.models.isa_json import (
     Comment,
     MaterialAttribute,
     MaterialAttributeValue,
+    Process,
     Study,
     OntologyAnnotation,
     Data as DataFile,
@@ -35,32 +36,140 @@ def reduce_investigation_for_target_repo(
     """
     Filters out assays that are not meant to be sent to the specified target repository.
 
+    BioSamples receives every study without its assays (and with all its samples).
+    For the other repositories, a study without any assays is kept as is. In the other
+    studies the resources that the remaining assays don't use are filtered out as well
+    (see `remove_unused_study_resources`).
+
     Args:
         input_investigation (Investigation): Input ISA JSON that contains the original information.
         target_repo (TargetRepository): Target repository as a constant.
 
     Returns:
         Investigation: Filtered ISA JSON.
+
+    Raises:
+        ValueError: A study has assays, but none for the target repository, so there is
+            nothing to submit to it.
     """
     filtered_investigation = input_investigation.model_copy(deep=True)
-    new_studies = []
-    studies = filtered_investigation.studies
-    for study in studies:
+    for study in filtered_investigation.studies:
         if target_repo == TargetRepository.BIOSAMPLES.value:
-            filtered_assays = []
-        else:
-            assays = study.assays
-            filtered_assays = [
+            study.assays = []
+        elif study.assays:
+            study.assays = [
                 assay
-                for assay in assays
+                for assay in study.assays
                 if is_assay_for_target_repo(assay, target_repo)
             ]
+            if not study.assays:
+                raise ValueError(
+                    f"Study '{study.title}' has no assays for the target repository "
+                    f"'{target_repo}', so there is nothing to submit to it."
+                )
+            remove_unused_study_resources(study)
 
-        study.assays = filtered_assays
-        new_studies.append(study)
-
-    filtered_investigation.studies = new_studies
     return filtered_investigation
+
+
+def remove_unused_study_resources(study: Study) -> None:
+    """
+    Removes the study level resources that the study's (filtered) assays don't use,
+    in place. The assays' process sequences link the resources together: starting
+    from the inputs of the assays' processes, the study process sequence is walked back
+    (see `_upstream_study_processes`). Removed are:
+    - the study processes that don't lead to an input of the assays;
+    - the samples, other materials and sources that are neither an input of the assays,
+      nor an input of a remaining study process;
+    - the outputs of the remaining study processes that refer to a removed sample,
+      other material or source;
+    - the protocols that are not executed by a process in an assay, or by a remaining
+      study process.
+
+    Args:
+        study (Study): The study, of which the assays are already filtered.
+    """
+    assay_processes = [
+        process for assay in study.assays for process in assay.processSequence
+    ]
+    assay_input_ids = {
+        node.id for process in assay_processes for node in process.inputs
+    }
+    study_processes, used_ids = _upstream_study_processes(study, assay_input_ids)
+
+    # Filtering out the unused materials
+    materials = study.materials
+    material_ids = {
+        material.id
+        for material in materials.sources + materials.samples + materials.otherMaterials
+    }
+    materials.sources = [m for m in materials.sources if m.id in used_ids]
+    materials.samples = [m for m in materials.samples if m.id in used_ids]
+    materials.otherMaterials = [m for m in materials.otherMaterials if m.id in used_ids]
+    removed_material_ids = material_ids - used_ids
+
+    # A process can also produce materials that are removed (e.g. one collection process
+    # for the samples of several repositories). Other outputs, like data files, stay.
+    for process in study_processes:
+        process.outputs = [  # type: ignore[assignment]
+            output
+            for output in process.outputs
+            if output.id not in removed_material_ids
+        ]
+    study.processSequence = study_processes
+
+    # Filtering the study protocols
+    protocol_ids = {
+        process.executesProtocol.id for process in assay_processes + study_processes
+    }
+    study.protocols = [
+        protocol for protocol in study.protocols if protocol.id in protocol_ids
+    ]
+
+
+def _upstream_study_processes(
+    study: Study, material_ids: set[str]
+) -> tuple[list[Process], set[str]]:
+    """
+    Walks the study process sequence back from the given materials: keeps the processes
+    that produce one of them, and the materials those processes take as input in turn,
+    so a chain of several steps (e.g. source -> sample -> sample) is kept as a whole.
+
+    A step can also be split over linked processes, e.g. one with only the source as
+    input and one with only the sample as output. So for a kept process without inputs,
+    the process it links back to via 'previousProcess' is kept as well.
+
+    Args:
+        study (Study): The study that holds the processes.
+        material_ids (set[str]): The ids of the materials to start from.
+
+    Returns:
+        tuple[list[Process], set[str]]: The kept study processes (in their original
+            order), and the ids of the given materials plus the inputs of those
+            processes.
+    """
+    used_ids = set(material_ids)
+    kept_process_ids: set[str] = set()
+    linked_process_ids: set[str] = set()
+    changed = True
+    while changed:
+        changed = False
+        for process in study.processSequence:
+            if process.id in kept_process_ids:
+                continue
+            if process.id in linked_process_ids or any(
+                output.id in used_ids for output in process.outputs
+            ):
+                kept_process_ids.add(process.id)
+                used_ids |= {node.id for node in process.inputs}
+                if not process.inputs and process.previousProcess is not None:
+                    linked_process_ids.add(process.previousProcess.id)
+                changed = True
+
+    kept_processes = [
+        process for process in study.processSequence if process.id in kept_process_ids
+    ]
+    return kept_processes, used_ids
 
 
 def detect_target_repo_comment(comments: list[Comment]) -> Comment:
@@ -582,17 +691,36 @@ def update_investigation(
     return investigation
 
 
-def map_data_files_to_repositories(
-    files: list[str], investigation: Investigation
-) -> dict[str, list[str]]:
-    # Note: This works well in
-    df_map: dict[str, list[str]] = {}
-    assays: list[Assay] = [
-        assay for study in investigation.studies for assay in study.assays
+def _assays_for_target_repos(
+    investigation: Investigation, target_repositories: list[str] | None
+) -> list[Assay]:
+    """
+    Returns the assays of the investigation, limited to the assays for the given
+    target repositories. When no target repositories are given, all assays are returned.
+    """
+    return [
+        assay
+        for study in investigation.studies
+        for assay in study.assays
+        if target_repositories is None
+        or detect_target_repo_comment(assay.comments).value in target_repositories
     ]
 
+
+def map_data_files_to_repositories(
+    files: list[str],
+    investigation: Investigation,
+    target_repositories: list[str] | None = None,
+) -> dict[str, list[str]]:
+    """
+    Maps the passed data files to the target repository of the assay that references them.
+    Only the assays for the given target repositories are mapped, so the data files of
+    assays that are not submitted are not required.
+    """
+    df_map: dict[str, list[str]] = {}
+    assays = _assays_for_target_repos(investigation, target_repositories)
+
     files_dicts = [{"full_name": f, "short_name": os.path.basename(f)} for f in files]
-    remaining_files = files_dicts.copy()
     for assay in assays:
         target_repo_comment: Comment = detect_target_repo_comment(assay.comments)
         # This is an effect of everything being optional in the Comment model.
@@ -616,28 +744,14 @@ def map_data_files_to_repositories(
                 {files}
                 Please correct the mismatch!"""
                 )
-            else:
-                remaining_files = [
-                    fd for fd in remaining_files if fd["short_name"] != adf
-                ]
 
+        # Files that no assay references are left out of the map, so they
+        # are not submitted.
         df_map[target_repo_comment.value] = [
             fd["full_name"]
             for fd in files_dicts
             if fd["short_name"] in assay_data_files
         ]
-
-    [
-        print_and_log(
-            msg=(
-                f"File '{rf['short_name']}' could not be mapped to any data "
-                f"file in the ISA-JSON. For this reason, it will be skipped "
-                f"during submission!"
-            ),
-            level="warning",
-        )
-        for rf in remaining_files
-    ]
 
     return df_map
 
@@ -663,8 +777,9 @@ class DataFileCheckReport:
 
     def log(self, header: str = "Data file check:") -> None:
         """
-        Logs the report: the counts at INFO level, every unreferenced file as a
-        WARNING and every missing or duplicate data file as an ERROR.
+        Logs the report: the counts at INFO level and every missing or duplicate
+        data file as an ERROR. Unreferenced files are only counted: they are not
+        submitted, which is expected when a target repository is left out.
         """
         print_and_log(
             f"{header}\n"
@@ -672,8 +787,6 @@ class DataFileCheckReport:
             f"- Data files not referenced in the ISA JSON: {len(self.unreferenced)}\n"
             f"- ISA JSON data files without a matching data file: {len(self.missing)}"
         )
-        for file in self.unreferenced:
-            print_and_log(f"Not referenced in the ISA JSON: {file}", level="warning")
         for name in self.missing:
             print_and_log(f"Missing data file: {name}", level="error")
         for name, paths in self.duplicates.items():
@@ -701,7 +814,9 @@ class DataFileCheckReport:
 
 
 def check_data_files(
-    files: list[str], investigation: Investigation
+    files: list[str],
+    investigation: Investigation,
+    target_repositories: list[str] | None = None,
 ) -> DataFileCheckReport:
     """
     Checks whether the data files in the ISA-JSON are matched by the passed files.
@@ -709,14 +824,15 @@ def check_data_files(
     Args:
         files (list[str]): Paths of the data files passed through the CLI.
         investigation (Investigation): The ISA-JSON investigation.
+        target_repositories (list[str] | None): Only check the data files of the
+            assays for these target repositories. When None, all assays are checked.
 
     Returns:
         DataFileCheckReport: Matched, unreferenced, missing and duplicate data files.
     """
     isa_names = {
         df.name
-        for study in investigation.studies
-        for assay in study.assays
+        for assay in _assays_for_target_repos(investigation, target_repositories)
         for df in assay.dataFiles
         if df.name
     }

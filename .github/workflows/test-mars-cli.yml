@@ -2,56 +2,57 @@ name: Test mars-cli
 on:
   push:
     paths:
-      - "mars_lib/**"
-      - "mars_cli.py"
-      - "tests/**"
-      - "pyproject.toml"
-      - "uv.lock"
+    - "mars_lib/**"
+    - "mars_cli.py"
+    - "tests/**"
+    - "pyproject.toml"
+    - "uv.lock"
   pull_request:
     paths:
-      - "mars_lib/**"
-      - "mars_cli.py"
-      - "tests/**"
-      - "pyproject.toml"
-      - "uv.lock"
+    - "mars_lib/**"
+    - "mars_cli.py"
+    - "tests/**"
+    - "pyproject.toml"
+    - "uv.lock"
     branches:
-      - main
+    - main
   workflow_dispatch:
+
 
 jobs:
   test-mars:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        python-version: ["3.12", "3.15"]
+        os: [ ubuntu-latest, windows-latest ]
+        python-version: [ "3.11", "3.15" ]
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: 'recursive'
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: true
+    - uses: actions/checkout@v5
+      with:
+        submodules: 'recursive'
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        python-version: ${{ matrix.python-version }}
+        enable-cache: true
 
-      - name: Install dependencies
-        run: uv sync --locked
+    - name: Install dependencies
+      run: uv sync --locked
 
-      - name: Test python code
-        env:
-          PYTHON_KEYRING_BACKEND: keyrings.alt.file.PlaintextKeyring
-        run: uv run pytest
+    - name: Test python code
+      env:
+        PYTHON_KEYRING_BACKEND: keyrings.alt.file.PlaintextKeyring
+      run: uv run pytest
 
-      - name: Formatting
-        run: uv run black --check mars_lib/
+    - name: Formatting
+      run: uv run black --check mars_lib/
 
-      - name: Linting
-        run: uv run ruff check mars_lib/
+    - name: Linting
+      run: uv run ruff check mars_lib/
 
-      - name: Create mypy cache directory
-        run: mkdir -p /tmp/mypy_cache
+    - name: Create mypy cache directory
+      run: mkdir -p /tmp/mypy_cache
 
-      - name: Type checking
-        run: uv run mypy --cache-dir /tmp/mypy_cache mars_lib/
+    - name: Type checking
+      run: uv run mypy --cache-dir /tmp/mypy_cache mars_lib/

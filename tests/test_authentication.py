@@ -10,11 +10,7 @@ fake_credentials_dict = {
         "username": "my_fake_account",
         "password": "my_super_secret_password",
     },
-    "metabolights_metadata": {
-        "username": "my_fake_account",
-        "password": "my_super_secret_password",
-    },
-    "metabolights_data": {
+    "metabolights": {
         "username": "my_fake_account",
         "password": "my_super_secret_password",
     },

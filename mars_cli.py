@@ -167,6 +167,7 @@ def submit(
     is_development = ctx.obj.get("DEVELOPMENT")
     if is_development is None:
         is_development = os.getenv("MARS_DEBUG") in ["1", 1]
+
     submission(
         webin_username,
         metabolights_username,

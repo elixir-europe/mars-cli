@@ -63,22 +63,22 @@ class TargetRepository(str, Enum):
                     "SERVICE": config.get(
                         "metabolights",
                         "development-url",
-                        fallback="https://wwwdev.ebi.ac.uk/metabolights/test/ws3/version",
+                        fallback="https://www-test.ebi.ac.uk/metabolights/mars/ws3/submissions/",
                     ),
                     "SUBMISSION": config.get(
                         "metabolights",
                         "development-submission-url",
-                        fallback="https://wwwdev.ebi.ac.uk/metabolights/test/ws3/submissions/",
+                        fallback="https://www-test.ebi.ac.uk/metabolights/mars/ws3/submissions/",
                     ),
                     "TOKEN": config.get(
                         "metabolights",
                         "development-token-url",
-                        fallback="https://wwwdev.ebi.ac.uk/metabolights/test/iam/realms/metabolights/protocol/openid-connect/token",
+                        fallback="https://www-test.ebi.ac.uk/metabolights/mars/ws3/auth/token",
                     ),
                     "STUDY-PAGE": config.get(
                         "metabolights",
                         "development-study-page-url",
-                        fallback="https://www-test.ebi.ac.uk/metabolights/",
+                        fallback="https://wwwdev.ebi.ac.uk/metabolights/",
                     ),
                 },
                 "BIOSAMPLES": {
@@ -136,12 +136,12 @@ class TargetRepository(str, Enum):
                     "SERVICE": config.get(
                         "metabolights",
                         "production-url",
-                        fallback="https://www.ebi.ac.uk/metabolights/ws3/",
+                        fallback="https://www-test.ebi.ac.uk/metabolights/mars/ws3/submissions/",
                     ),
                     "SUBMISSION": config.get(
                         "metabolights",
                         "production-submission-url",
-                        fallback="https://www.ebi.ac.uk/metabolights/ws3/submissions/provisional-studies",
+                        fallback="https://www-test.ebi.ac.uk/metabolights/mars/ws3/submissions/",
                     ),
                     "TOKEN": config.get(
                         "metabolights",

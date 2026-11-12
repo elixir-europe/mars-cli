@@ -18,9 +18,9 @@ from mars_lib.models.isa_json import (
     Data,
     Material,
     Assay,
-    Comment,
     Person,
     Investigation,
+    IsaReference,
     MaterialAttribute,
     MaterialAttributeValue,
     OntologyAnnotation,
@@ -42,6 +42,14 @@ from pathlib import Path
 ENA_MINIMAL_ISA = "MARS/test-data/ena-minimal.json"
 METABOLIGHTS_ISA = "MARS/test-data/metabolights-lcms.json"
 ENA_COMPLETE_ISA = "MARS/test-data/ena-complete.json"
+# One study with an ENA and a MetaboLights assay, that each use another sample
+HOLOFOOD_ISA = "MARS/test-data/HoloFoodinISA_v1.0.json"
+# Every sampling step is split over two linked processes: one with only the source as
+# input, and one with only the sample as output
+PTX_ISA = (
+    "MARS/test-data/ISA-PTX-TEST/isajson/"
+    "i_investigation_PTX_Pilot_Daphnia_magna_valid.json"
+)
 
 
 def _multi_repository_investigation():
@@ -190,8 +198,9 @@ def test_assay_characteristic_categories_are_optional():
 
     assert Assay.model_validate(without_key).characteristicCategories == []
     assert (
-        Assay.model_validate(minimal(Assay, characteristicCategories=[]))
-        .characteristicCategories
+        Assay.model_validate(
+            minimal(Assay, characteristicCategories=[])
+        ).characteristicCategories
         == []
     )
 
@@ -276,6 +285,462 @@ def test_reduce_investigation_for_biosamples():
 
     assert len(filtered_investigation.studies[0].assays) == 0
 
+
+
+def _investigation_with_assays(*assays):
+    study = minimal_study(assays=list(assays))
+    return Investigation.model_validate(minimal_investigation(studies=[study]))
+
+
+def test_find_submission_id_comment_value_returns_first_value_across_studies():
+    first_assay = minimal_assay(
+        comments=[
+            {"name": TARGET_REPO_KEY, "value": "ena"},
+            {"name": SUBMISSION_ID_KEY, "value": "first-id"},
+            {"name": SUBMISSION_ID_KEY, "value": "duplicate-id"},
+        ]
+    )
+    second_assay = minimal_assay(
+        comments=[
+            {"name": TARGET_REPO_KEY, "value": "ena"},
+            {"name": SUBMISSION_ID_KEY, "value": "later-id"},
+        ]
+    )
+    later_study_assay = minimal_assay(
+        comments=[
+            {"name": TARGET_REPO_KEY, "value": "metabolights"},
+            {"name": SUBMISSION_ID_KEY, "value": "next-study-id"},
+        ]
+    )
+    investigation = Investigation.model_validate(
+        minimal_investigation(
+            studies=[
+                minimal_study(assays=[first_assay, second_assay]),
+                minimal_study(assays=[later_study_assay]),
+            ]
+        )
+    )
+
+    assert find_submission_id_comment_value(investigation) == "first-id"
+
+
+def test_find_submission_id_comment_value_returns_none_when_absent():
+    no_assays = Investigation.model_validate(
+        minimal_investigation(studies=[minimal_study(assays=[])])
+    )
+    no_submission_id = Investigation.model_validate(
+        minimal_investigation(
+            studies=[
+                minimal_study(
+                    assays=[
+                        minimal_assay(
+                            comments=[{"name": TARGET_REPO_KEY, "value": "ena"}]
+                        )
+                    ]
+                )
+            ]
+        )
+    )
+
+    assert find_submission_id_comment_value(no_assays) is None
+    assert find_submission_id_comment_value(no_submission_id) is None
+
+
+def test_update_initiation_comments_replaces_repository_comments_and_preserves_others():
+    assay = minimal_assay(
+        comments=[
+            {"name": TARGET_REPO_KEY, "value": "ena"},
+            {"name": SUBMISSION_ID_KEY, "value": "old-id"},
+            {"name": "assay type", "value": "old type"},
+            {"name": "keep", "value": "unchanged"},
+        ]
+    )
+    investigation = _investigation_with_assays(assay)
+    response = InitiationResponse(
+        submission_id="new-id", assay_comments={"assay type": "LC-MS"}
+    )
+
+    update_initiation_comments(investigation, "ena", response)
+
+    comments = investigation.studies[0].assays[0].comments
+    assert [(comment.name, comment.value) for comment in comments] == [
+        (SUBMISSION_ID_KEY, "new-id"),
+        ("assay type", "LC-MS"),
+        (TARGET_REPO_KEY, "ena"),
+        ("keep", "unchanged"),
+    ]
+
+
+def test_update_initiation_comments_without_new_submission_id_keeps_existing_id():
+    assay = minimal_assay(
+        comments=[
+            {"name": TARGET_REPO_KEY, "value": "ena"},
+            {"name": SUBMISSION_ID_KEY, "value": "existing-id"},
+        ]
+    )
+    investigation = _investigation_with_assays(assay)
+
+    update_initiation_comments(
+        investigation, "ena", InitiationResponse(assay_comments={})
+    )
+
+    assert find_submission_id_comment_value(investigation) == "existing-id"
+
+
+def _ids(nodes) -> list[str]:
+    return [node.id for node in nodes]
+
+
+def _assert_study_processes_refer_to_study_materials(study, other_output_ids=()):
+    """Every input and output of the study processes is a material that is still in
+    the study (or one of the given other outputs, like a data file)."""
+    materials = study.materials
+    material_ids = set(
+        _ids(materials.sources + materials.samples + materials.otherMaterials)
+    )
+    for process in study.processSequence:
+        assert set(_ids(process.inputs)) <= material_ids
+        assert set(_ids(process.outputs)) <= material_ids | set(other_output_ids)
+
+
+def test_reduce_investigation_removes_unused_study_resources_for_ena():
+    study = reduce_investigation_for_target_repo(
+        load_investigation(HOLOFOOD_ISA), TargetRepository.ENA.value
+    ).studies[0]
+
+    assert _ids(study.assays) == ["#assay/262_263"]
+    assert _ids(study.materials.samples) == ["#sample/3066"]
+    assert _ids(study.materials.sources) == ["#source/3064"]
+    # The sample collection protocol and the protocols of the ENA assay
+    assert _ids(study.protocols) == [
+        "#protocol/study_98_2908",
+        "#protocol/assay_262_86",
+        "#protocol/assay_263_2926",
+    ]
+
+
+def test_reduce_investigation_removes_unused_study_resources_for_metabolights():
+    study = reduce_investigation_for_target_repo(
+        load_investigation(HOLOFOOD_ISA), TargetRepository.METABOLIGHTS.value
+    ).studies[0]
+
+    assert _ids(study.materials.samples) == ["#sample/3065"]
+    assert _ids(study.materials.sources) == ["#source/3064"]
+    assert _ids(study.protocols) == [
+        "#protocol/study_98_2908",
+        "#protocol/assay_268_87",
+        "#protocol/assay_269_88",
+        "#protocol/assay_270_2972",
+        "#protocol/data_transformation_01",
+        "#protocol/metabolite_identification_01",
+    ]
+
+
+def test_reduce_investigation_keeps_all_study_resources_for_biosamples():
+    investigation = load_investigation(HOLOFOOD_ISA)
+    original = investigation.studies[0]
+
+    study = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.BIOSAMPLES.value
+    ).studies[0]
+
+    assert study.assays == []
+    assert study.materials == original.materials
+    assert study.processSequence == original.processSequence
+    assert study.protocols == original.protocols
+
+
+def test_reduce_investigation_does_not_change_the_input_investigation():
+    investigation = load_investigation(HOLOFOOD_ISA)
+    original = investigation.model_copy(deep=True)
+
+    reduce_investigation_for_target_repo(investigation, TargetRepository.ENA.value)
+
+    assert investigation == original
+
+
+def test_reduce_investigation_fails_without_assays_for_the_repo():
+    # ena-complete.json only has an ENA assay
+    investigation = load_investigation(ENA_COMPLETE_ISA)
+
+    with pytest.raises(ValueError, match="no assays for the target repository"):
+        reduce_investigation_for_target_repo(
+            investigation, TargetRepository.METABOLIGHTS.value
+        )
+
+
+def test_reduce_investigation_keeps_an_isa_json_without_assays_as_is():
+    investigation = load_investigation(HOLOFOOD_ISA)
+    investigation.studies[0].assays = []
+
+    reduced = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    )
+
+    assert reduced == investigation
+
+
+def _with_metabolights_only_study(investigation):
+    """Adds a second study that only has the MetaboLights assay."""
+    metabolights_study = investigation.studies[0].model_copy(deep=True)
+    metabolights_study.id = "#study/metabolights-only"
+    metabolights_study.title = "MetaboLights only"
+    metabolights_study.assays = [
+        assay
+        for assay in metabolights_study.assays
+        if is_assay_for_target_repo(assay, TargetRepository.METABOLIGHTS.value)
+    ]
+    investigation.studies.append(metabolights_study)
+    return investigation
+
+
+def test_reduce_investigation_fails_when_a_study_has_no_assays_for_the_repo():
+    investigation = _with_metabolights_only_study(load_investigation(HOLOFOOD_ISA))
+
+    with pytest.raises(
+        ValueError,
+        match="Study 'MetaboLights only' has no assays for the target repository 'ena'",
+    ):
+        reduce_investigation_for_target_repo(investigation, TargetRepository.ENA.value)
+
+    metabolights = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS.value
+    )
+    assert _ids(metabolights.studies) == _ids(investigation.studies)
+
+
+def test_reduce_investigation_keeps_a_study_without_assays_as_is():
+    investigation = load_investigation(HOLOFOOD_ISA)
+    study_without_assays = investigation.studies[0].model_copy(deep=True)
+    study_without_assays.id = "#study/no-assays"
+    study_without_assays.assays = []
+    investigation.studies.append(study_without_assays)
+
+    reduced = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    )
+
+    assert _ids(reduced.studies) == _ids(investigation.studies)
+    assert reduced.studies[1] == study_without_assays
+
+
+def test_reduce_investigation_removes_sources_of_removed_samples():
+    # Sample 3065 (MetaboLights) is collected from another source than 3066 (ENA)
+    investigation = load_investigation(HOLOFOOD_ISA)
+    study = investigation.studies[0]
+    other_source = study.materials.sources[0].model_copy(
+        update={"id": "#source/other", "name": "other source"}
+    )
+    study.materials.sources.append(other_source)
+    collection_3065 = study.processSequence[0]
+    assert _ids(collection_3065.outputs) == ["#sample/3065"]
+    collection_3065.inputs = [IsaReference.model_validate({"@id": "#source/other"})]
+
+    ena = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    ).studies[0]
+    metabolights = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS.value
+    ).studies[0]
+
+    assert _ids(ena.materials.sources) == ["#source/3064"]
+    assert _ids(metabolights.materials.sources) == ["#source/other"]
+
+
+def test_reduce_investigation_removes_study_processes_of_removed_protocols():
+    # Sample 3065 (MetaboLights) is collected with another protocol than 3066 (ENA)
+    investigation = load_investigation(HOLOFOOD_ISA)
+    study = investigation.studies[0]
+    other_protocol = study.protocols[0].model_copy(
+        update={"id": "#protocol/other_collection", "name": "other collection"}
+    )
+    study.protocols.append(other_protocol)
+    collection_3065, collection_3066 = study.processSequence
+    collection_3065.executesProtocol = IsaReference.model_validate(
+        {"@id": "#protocol/other_collection"}
+    )
+
+    ena = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    ).studies[0]
+    metabolights = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS.value
+    ).studies[0]
+
+    assert "#protocol/other_collection" not in _ids(ena.protocols)
+    assert _ids(ena.processSequence) == [collection_3066.id]
+    assert "#protocol/study_98_2908" not in _ids(metabolights.protocols)
+    assert _ids(metabolights.processSequence) == [collection_3065.id]
+
+
+def test_reduce_investigation_removes_unused_study_other_materials():
+    # Move the other materials of both assays to the study level
+    investigation = load_investigation(HOLOFOOD_ISA)
+    study = investigation.studies[0]
+    study.materials.otherMaterials = [
+        material
+        for assay in study.assays
+        for material in assay.materials.otherMaterials
+    ]
+    assert _ids(study.materials.otherMaterials) == [
+        "#other_material/3067",
+        "#other_material/3207",
+        "#other_material/3208",
+    ]
+
+    ena = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    ).studies[0]
+    metabolights = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS.value
+    ).studies[0]
+
+    assert _ids(ena.materials.otherMaterials) == ["#other_material/3067"]
+    assert _ids(metabolights.materials.otherMaterials) == [
+        "#other_material/3207",
+        "#other_material/3208",
+    ]
+
+
+def test_reduce_investigation_removes_study_processes_of_removed_samples():
+    # Both samples are collected with the same protocol, which ENA still needs: the
+    # collection of the removed sample 3065 must go anyway
+    study = reduce_investigation_for_target_repo(
+        load_investigation(HOLOFOOD_ISA), TargetRepository.ENA.value
+    ).studies[0]
+
+    assert _ids(study.processSequence) == ["#process/sample_collection/3066"]
+    assert "#protocol/study_98_2908" in _ids(study.protocols)
+    _assert_study_processes_refer_to_study_materials(study)
+
+
+def test_reduce_investigation_keeps_multi_stage_study_chains():
+    # Sample 3066 (ENA) is prepared in two stages: source 3064 -> sample 'stage-1'
+    # -> sample 3066. Only sample 3066 is used by the ENA assay.
+    investigation = load_investigation(HOLOFOOD_ISA)
+    study = investigation.studies[0]
+    collection_3065, collection_3066 = study.processSequence
+    stage_1 = study.materials.samples[1].model_copy(
+        update={"id": "#sample/stage-1", "name": "stage 1"}
+    )
+    assert _ids(collection_3066.outputs) == ["#sample/3066"]
+    study.materials.samples.append(stage_1)
+    first_stage = collection_3066.model_copy(
+        update={
+            "id": "#process/stage-1",
+            "outputs": [IsaReference.model_validate({"@id": "#sample/stage-1"})],
+        }
+    )
+    collection_3066.inputs = [IsaReference.model_validate({"@id": "#sample/stage-1"})]
+    study.processSequence = [collection_3065, first_stage, collection_3066]
+
+    ena = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    ).studies[0]
+    metabolights = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS.value
+    ).studies[0]
+
+    assert _ids(ena.materials.samples) == ["#sample/3066", "#sample/stage-1"]
+    assert _ids(ena.materials.sources) == ["#source/3064"]
+    assert _ids(ena.processSequence) == [first_stage.id, collection_3066.id]
+    _assert_study_processes_refer_to_study_materials(ena)
+    assert _ids(metabolights.materials.samples) == ["#sample/3065"]
+    assert _ids(metabolights.processSequence) == [collection_3065.id]
+    _assert_study_processes_refer_to_study_materials(metabolights)
+
+
+def test_reduce_investigation_prunes_outputs_of_a_shared_study_process():
+    # One collection process produces both samples, and a data file
+    investigation = load_investigation(HOLOFOOD_ISA)
+    study = investigation.studies[0]
+    collection_3065, collection_3066 = study.processSequence
+    data_file = IsaReference.model_validate({"@id": "#data_file/collection-log"})
+    collection_3065.outputs = collection_3065.outputs + collection_3066.outputs
+    collection_3065.outputs.append(data_file)
+    study.processSequence = [collection_3065]
+
+    ena = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    ).studies[0]
+    metabolights = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS.value
+    ).studies[0]
+
+    assert _ids(ena.processSequence[0].outputs) == [
+        "#sample/3066",
+        "#data_file/collection-log",
+    ]
+    _assert_study_processes_refer_to_study_materials(ena, [data_file.id])
+    assert _ids(metabolights.processSequence[0].outputs) == [
+        "#sample/3065",
+        "#data_file/collection-log",
+    ]
+    _assert_study_processes_refer_to_study_materials(metabolights, [data_file.id])
+
+
+def test_reduce_investigation_follows_previous_process_without_inputs():
+    # The collection of sample 3066 (ENA) is split over two linked processes: one that
+    # takes the source and runs its own protocol, and one that produces the sample
+    investigation = load_investigation(HOLOFOOD_ISA)
+    study = investigation.studies[0]
+    study.protocols.append(
+        study.protocols[0].model_copy(
+            update={"id": "#protocol/pre_collection", "name": "pre collection"}
+        )
+    )
+    collection_3065, collection_3066 = study.processSequence
+    first_half = collection_3066.model_copy(
+        update={
+            "id": "#process/split/1",
+            "executesProtocol": IsaReference.model_validate(
+                {"@id": "#protocol/pre_collection"}
+            ),
+            "outputs": [],
+            "nextProcess": IsaReference.model_validate({"@id": "#process/split/2"}),
+        }
+    )
+    second_half = collection_3066.model_copy(
+        update={
+            "id": "#process/split/2",
+            "inputs": [],
+            "previousProcess": IsaReference.model_validate({"@id": "#process/split/1"}),
+        }
+    )
+    study.processSequence = [collection_3065, first_half, second_half]
+
+    ena = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    ).studies[0]
+    metabolights = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS.value
+    ).studies[0]
+
+    assert _ids(ena.materials.sources) == ["#source/3064"]
+    assert "#protocol/pre_collection" in _ids(ena.protocols)
+    assert _ids(ena.processSequence) == ["#process/split/1", "#process/split/2"]
+    assert "#protocol/pre_collection" not in _ids(metabolights.protocols)
+    assert _ids(metabolights.processSequence) == [collection_3065.id]
+
+
+@pytest.mark.parametrize(
+    "target_repo", [TargetRepository.ENA.value, TargetRepository.METABOLIGHTS.value]
+)
+def test_reduce_investigation_keeps_sources_of_linked_processes_in_ptx(target_repo):
+    investigation = load_investigation(PTX_ISA)
+    original = investigation.studies[0]
+    # The protocol of the first halves, that take the sources
+    source_protocol_ids = {
+        process.executesProtocol.id
+        for process in original.processSequence
+        if process.inputs
+    }
+
+    study = reduce_investigation_for_target_repo(investigation, target_repo).studies[0]
+
+    assert _ids(study.materials.sources) == _ids(original.materials.sources)
+    assert source_protocol_ids <= set(_ids(study.protocols))
+    assert _ids(study.processSequence) == _ids(original.processSequence)
 
 
 def test_data_type_is_free_text():
@@ -968,6 +1433,34 @@ def test_map_data_files_to_repositories():
     map_data_files_to_repositories(duplicated_files, investigation)
 
 
+def test_data_files_of_assays_not_submitted_are_ignored():
+    investigation = _multi_repository_investigation()
+    metabolights_files = [
+        "data/metpro-analysis.txt",
+        "data/ms-data-metpro--1.mzml",
+        "data/ms-data-metpro--2.mzml",
+        "data/ms-data-metpro--3.mzml",
+        "data/ms-data-metpro--4.mzml",
+    ]
+    # Only MetaboLights is submitted, so the ENA data files are not required
+    target_repositories = [TargetRepository.METABOLIGHTS.value]
+
+    assert map_data_files_to_repositories(
+        metabolights_files, investigation, target_repositories
+    ) == {TargetRepository.METABOLIGHTS.value: metabolights_files}
+
+    report = check_data_files(metabolights_files, investigation, target_repositories)
+    assert report.missing == [] and report.duplicates == {}
+    assert report.matched == metabolights_files
+
+    # Without target repositories, every assay is still checked
+    assert check_data_files(metabolights_files, investigation).missing == [
+        "ENA_TEST2.EXP1.R1.fastq.gz",
+        "ENA_TEST2.EXP1.R2.fastq.gz",
+        "ENA_TEST2.EXP2.SE.fastq.gz",
+    ]
+
+
 # Test data that does not comply with the strict MARS model (yet). strict=True:
 # once a file complies, its test fails so the entry gets removed.
 NON_COMPLIANT_TEST_FILES = {
@@ -1040,7 +1533,9 @@ def test_serialization_with_exclude_none_drops_all_none_values(file_path):
     investigation = load_investigation(file_path)
 
     as_dict = investigation.model_dump(by_alias=True, exclude_none=True)
-    as_json = json.loads(investigation.model_dump_json(by_alias=True, exclude_none=True))
+    as_json = json.loads(
+        investigation.model_dump_json(by_alias=True, exclude_none=True)
+    )
 
     assert not _contains_none(as_dict)
     assert not _contains_none(as_json)
