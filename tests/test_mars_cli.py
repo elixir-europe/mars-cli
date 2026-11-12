@@ -265,3 +265,36 @@ def test_submission_fails_before_submitting_when_data_files_are_missing(
                 output=str(tmp_path / "out"),
                 data_file_paths=[],
             )
+
+
+def test_submission_fails_before_submitting_when_a_repository_has_no_assays(
+    mars_cli, tmp_path, monkeypatch
+):
+    from mars_lib import submit as submit_module
+
+    # The ISA JSON only has an ENA assay, so there is nothing to submit to
+    # MetaboLights: BioSamples must not be reached either
+    monkeypatch.setattr(
+        submit_module,
+        "submit_to_biosamples",
+        MagicMock(side_effect=AssertionError("should not be called")),
+    )
+    data = tmp_path / "data"
+    data.mkdir()
+    for name in _isa_data_file_names():
+        (data / name).write_text("")
+
+    with open("tests/test_credentials_example.json") as credentials_file:
+        with pytest.raises(ValueError, match="no assays for the target repository"):
+            submit_module.submission(
+                webin_username="",
+                metabolights_username="",
+                metabolights_ftp_username="",
+                credentials_file=credentials_file,
+                isa_json_file=str(TEST_ISA_JSON),
+                target_repositories=["biosamples", "metabolights"],
+                urls={},
+                file_transfer="ftp",
+                output=str(tmp_path / "out"),
+                data_file_paths=sorted(str(f) for f in data.iterdir()),
+            )

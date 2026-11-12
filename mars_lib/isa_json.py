@@ -31,9 +31,10 @@ def reduce_investigation_for_target_repo(
     """
     Filters out assays that are not meant to be sent to the specified target repository.
 
-    For every repository except BioSamples (which receives no assays, but all samples),
-    the study level resources that the remaining assays don't use are filtered out as
-    well (see `remove_unused_study_resources`).
+    BioSamples receives every study without its assays (and with all its samples).
+    For the other repositories, a study without any assays is kept as is. In the other
+    studies the resources that the remaining assays don't use are filtered out as well
+    (see `remove_unused_study_resources`).
 
     Args:
         input_investigation (Investigation): Input ISA JSON that contains the original information.
@@ -41,17 +42,26 @@ def reduce_investigation_for_target_repo(
 
     Returns:
         Investigation: Filtered ISA JSON.
+
+    Raises:
+        ValueError: A study has assays, but none for the target repository, so there is
+            nothing to submit to it.
     """
     filtered_investigation = input_investigation.model_copy(deep=True)
     for study in filtered_investigation.studies:
         if target_repo == TargetRepository.BIOSAMPLES.value:
             study.assays = []
-        else:
+        elif study.assays:
             study.assays = [
                 assay
                 for assay in study.assays
                 if is_assay_for_target_repo(assay, target_repo)
             ]
+            if not study.assays:
+                raise ValueError(
+                    f"Study '{study.title}' has no assays for the target repository "
+                    f"'{target_repo}', so there is nothing to submit to it."
+                )
             remove_unused_study_resources(study)
 
     return filtered_investigation

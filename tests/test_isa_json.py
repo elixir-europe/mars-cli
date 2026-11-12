@@ -331,6 +331,71 @@ def test_reduce_investigation_does_not_change_the_input_investigation():
     assert investigation == original
 
 
+def test_reduce_investigation_fails_without_assays_for_the_repo():
+    # ena-complete.json only has an ENA assay
+    investigation = load_investigation(ENA_COMPLETE_ISA)
+
+    with pytest.raises(ValueError, match="no assays for the target repository"):
+        reduce_investigation_for_target_repo(
+            investigation, TargetRepository.METABOLIGHTS.value
+        )
+
+
+def test_reduce_investigation_keeps_an_isa_json_without_assays_as_is():
+    investigation = load_investigation(HOLOFOOD_ISA)
+    investigation.studies[0].assays = []
+
+    reduced = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    )
+
+    assert reduced == investigation
+
+
+def _with_metabolights_only_study(investigation):
+    """Adds a second study that only has the MetaboLights assay."""
+    metabolights_study = investigation.studies[0].model_copy(deep=True)
+    metabolights_study.id = "#study/metabolights-only"
+    metabolights_study.title = "MetaboLights only"
+    metabolights_study.assays = [
+        assay
+        for assay in metabolights_study.assays
+        if is_assay_for_target_repo(assay, TargetRepository.METABOLIGHTS.value)
+    ]
+    investigation.studies.append(metabolights_study)
+    return investigation
+
+
+def test_reduce_investigation_fails_when_a_study_has_no_assays_for_the_repo():
+    investigation = _with_metabolights_only_study(load_investigation(HOLOFOOD_ISA))
+
+    with pytest.raises(
+        ValueError,
+        match="Study 'MetaboLights only' has no assays for the target repository 'ena'",
+    ):
+        reduce_investigation_for_target_repo(investigation, TargetRepository.ENA.value)
+
+    metabolights = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS.value
+    )
+    assert _ids(metabolights.studies) == _ids(investigation.studies)
+
+
+def test_reduce_investigation_keeps_a_study_without_assays_as_is():
+    investigation = load_investigation(HOLOFOOD_ISA)
+    study_without_assays = investigation.studies[0].model_copy(deep=True)
+    study_without_assays.id = "#study/no-assays"
+    study_without_assays.assays = []
+    investigation.studies.append(study_without_assays)
+
+    reduced = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    )
+
+    assert _ids(reduced.studies) == _ids(investigation.studies)
+    assert reduced.studies[1] == study_without_assays
+
+
 def test_reduce_investigation_removes_sources_of_removed_samples():
     # Sample 3065 (MetaboLights) is collected from another source than 3066 (ENA)
     investigation = load_investigation(HOLOFOOD_ISA)
