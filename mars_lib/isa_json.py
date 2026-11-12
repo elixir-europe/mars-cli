@@ -65,7 +65,8 @@ def remove_unused_study_resources(study: Study) -> None:
     - sources that are not an input of a study process that produces one of the
       remaining samples;
     - protocols that are not executed by a process in an assay, or by a study process
-      that produces one of the remaining samples.
+      that produces one of the remaining samples;
+    - study processes that execute one of the removed protocols.
 
     Args:
         study (Study): The study, of which the assays are already filtered.
@@ -96,6 +97,12 @@ def remove_unused_study_resources(study: Study) -> None:
     }
     study.protocols = [
         protocol for protocol in study.protocols if protocol.id in protocol_ids
+    ]
+
+    study.processSequence = [
+        process
+        for process in study.processSequence
+        if process.executesProtocol.id in protocol_ids
     ]
 
 

@@ -354,6 +354,44 @@ def test_reduce_investigation_removes_sources_of_removed_samples():
     assert _ids(metabolights.materials.sources) == ["#source/other"]
 
 
+def test_reduce_investigation_removes_study_processes_of_removed_protocols():
+    # Sample 3065 (MetaboLights) is collected with another protocol than 3066 (ENA)
+    investigation = load_investigation(HOLOFOOD_ISA)
+    study = investigation.studies[0]
+    other_protocol = study.protocols[0].model_copy(
+        update={"id": "#protocol/other_collection", "name": "other collection"}
+    )
+    study.protocols.append(other_protocol)
+    collection_3065, collection_3066 = study.processSequence
+    collection_3065.executesProtocol = IsaReference.model_validate(
+        {"@id": "#protocol/other_collection"}
+    )
+
+    ena = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    ).studies[0]
+    metabolights = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS.value
+    ).studies[0]
+
+    assert "#protocol/other_collection" not in _ids(ena.protocols)
+    assert _ids(ena.processSequence) == [collection_3066.id]
+    assert "#protocol/study_98_2908" not in _ids(metabolights.protocols)
+    assert _ids(metabolights.processSequence) == [collection_3065.id]
+
+
+def test_reduce_investigation_keeps_study_processes_of_remaining_protocols():
+    # Both samples are collected with the same protocol, which ENA still needs
+    study = reduce_investigation_for_target_repo(
+        load_investigation(HOLOFOOD_ISA), TargetRepository.ENA.value
+    ).studies[0]
+
+    assert _ids(study.processSequence) == [
+        "#process/sample_collection/3065",
+        "#process/sample_collection/3066",
+    ]
+
+
 def test_data_type_is_free_text():
     # The type is not restricted to a fixed list of values
     assert Data.model_validate(
