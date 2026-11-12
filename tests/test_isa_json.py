@@ -947,6 +947,34 @@ def test_map_data_files_to_repositories():
     map_data_files_to_repositories(duplicated_files, investigation)
 
 
+def test_data_files_of_assays_not_submitted_are_ignored():
+    investigation = _multi_repository_investigation()
+    metabolights_files = [
+        "data/metpro-analysis.txt",
+        "data/ms-data-metpro--1.mzml",
+        "data/ms-data-metpro--2.mzml",
+        "data/ms-data-metpro--3.mzml",
+        "data/ms-data-metpro--4.mzml",
+    ]
+    # Only MetaboLights is submitted, so the ENA data files are not required
+    target_repositories = [TargetRepository.METABOLIGHTS.value]
+
+    assert map_data_files_to_repositories(
+        metabolights_files, investigation, target_repositories
+    ) == {TargetRepository.METABOLIGHTS.value: metabolights_files}
+
+    report = check_data_files(metabolights_files, investigation, target_repositories)
+    assert report.missing == [] and report.duplicates == {}
+    assert report.matched == metabolights_files
+
+    # Without target repositories, every assay is still checked
+    assert check_data_files(metabolights_files, investigation).missing == [
+        "ENA_TEST2.EXP1.R1.fastq.gz",
+        "ENA_TEST2.EXP1.R2.fastq.gz",
+        "ENA_TEST2.EXP2.SE.fastq.gz",
+    ]
+
+
 # Test data that does not comply with the strict MARS model (yet). strict=True:
 # once a file complies, its test fails so the entry gets removed.
 NON_COMPLIANT_TEST_FILES = {
