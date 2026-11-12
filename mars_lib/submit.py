@@ -92,9 +92,9 @@ def submission(
 
     print_and_log(f"ISA JSON with investigation '{investigation.title}' is valid.")
 
-    # Check that every data file in the ISA-JSON is matched by a passed file
+    # Check that every data file of the assays to submit is matched by a passed file
     data_file_report = check_data_files(
-        [str(dfp) for dfp in data_file_paths], investigation
+        [str(dfp) for dfp in data_file_paths], investigation, target_repositories
     )
     data_file_report.log()
     if data_file_report.missing:
@@ -110,7 +110,9 @@ def submission(
 
     # create data file map
     data_file_map = map_data_files_to_repositories(
-        files=[str(dfp) for dfp in data_file_paths], investigation=investigation
+        files=[str(dfp) for dfp in data_file_paths],
+        investigation=investigation,
+        target_repositories=target_repositories,
     )
 
     time_stamp = datetime.timestamp(datetime.now())
