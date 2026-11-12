@@ -632,14 +632,34 @@ def update_investigation(
     return investigation
 
 
-def map_data_files_to_repositories(
-    files: list[str], investigation: Investigation
-) -> dict[str, list[str]]:
-    # Note: This works well in
-    df_map: dict[str, list[str]] = {}
-    assays: list[Assay] = [
-        assay for study in investigation.studies for assay in study.assays
+def _assays_for_target_repos(
+    investigation: Investigation, target_repositories: list[str] | None
+) -> list[Assay]:
+    """
+    Returns the assays of the investigation, limited to the assays for the given
+    target repositories. When no target repositories are given, all assays are returned.
+    """
+    return [
+        assay
+        for study in investigation.studies
+        for assay in study.assays
+        if target_repositories is None
+        or detect_target_repo_comment(assay.comments).value in target_repositories
     ]
+
+
+def map_data_files_to_repositories(
+    files: list[str],
+    investigation: Investigation,
+    target_repositories: list[str] | None = None,
+) -> dict[str, list[str]]:
+    """
+    Maps the passed data files to the target repository of the assay that references them.
+    Only the assays for the given target repositories are mapped, so the data files of
+    assays that are not submitted are not required.
+    """
+    df_map: dict[str, list[str]] = {}
+    assays = _assays_for_target_repos(investigation, target_repositories)
 
     files_dicts = [{"full_name": f, "short_name": os.path.basename(f)} for f in files]
     remaining_files = files_dicts.copy()
@@ -751,7 +771,9 @@ class DataFileCheckReport:
 
 
 def check_data_files(
-    files: list[str], investigation: Investigation
+    files: list[str],
+    investigation: Investigation,
+    target_repositories: list[str] | None = None,
 ) -> DataFileCheckReport:
     """
     Checks whether the data files in the ISA-JSON are matched by the passed files.
@@ -759,14 +781,15 @@ def check_data_files(
     Args:
         files (list[str]): Paths of the data files passed through the CLI.
         investigation (Investigation): The ISA-JSON investigation.
+        target_repositories (list[str] | None): Only check the data files of the
+            assays for these target repositories. When None, all assays are checked.
 
     Returns:
         DataFileCheckReport: Matched, unreferenced, missing and duplicate data files.
     """
     isa_names = {
         df.name
-        for study in investigation.studies
-        for assay in study.assays
+        for assay in _assays_for_target_repos(investigation, target_repositories)
         for df in assay.dataFiles
         if df.name
     }

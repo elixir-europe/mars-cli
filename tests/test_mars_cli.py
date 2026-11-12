@@ -246,11 +246,12 @@ def test_submission_fails_before_submitting_when_data_files_are_missing(
     from mars_lib import submit as submit_module
 
     # Must never reach a target repository
-    monkeypatch.setattr(
-        submit_module,
-        "submit_to_biosamples",
-        MagicMock(side_effect=AssertionError("should not be called")),
-    )
+    for name in ["submit_to_biosamples", "upload_to_ena", "submit_to_ena"]:
+        monkeypatch.setattr(
+            submit_module,
+            name,
+            MagicMock(side_effect=AssertionError("should not be called")),
+        )
     with open("tests/test_credentials_example.json") as credentials_file:
         with pytest.raises(ValueError, match="missing from the data files"):
             submit_module.submission(
@@ -259,8 +260,96 @@ def test_submission_fails_before_submitting_when_data_files_are_missing(
                 metabolights_ftp_username="",
                 credentials_file=credentials_file,
                 isa_json_file=str(TEST_ISA_JSON),
-                target_repositories=["biosamples"],
+                target_repositories=["biosamples", "ena"],
                 urls={},
+                file_transfer="ftp",
+                output=str(tmp_path / "out"),
+                data_file_paths=[],
+            )
+
+
+METABOLIGHTS_DATA_FILES = [
+    "metpro-analysis.txt",
+    "ms-data-metpro--1.mzml",
+    "ms-data-metpro--2.mzml",
+    "ms-data-metpro--3.mzml",
+    "ms-data-metpro--4.mzml",
+]
+
+
+def test_submit_with_ena_disabled_only_maps_data_files_of_submitted_assays(
+    mars_cli, tmp_path, monkeypatch
+):
+    """Issue #51: with '--submit-to-ena False', the data files of the ENA assay must
+    not be mapped to the files in '--data-folder', so leaving them out is fine."""
+    from mars_lib import submit as submit_module
+    from mars_lib.isa_json import load_investigation
+
+    # One investigation with a MetaboLights assay and an ENA assay
+    investigation = load_investigation("MARS/test-data/metabolights-lcms.json")
+    ena_assay = load_investigation(str(TEST_ISA_JSON)).studies[0].assays[0]
+    investigation.studies[0].assays.append(ena_assay)
+    isa_json = tmp_path / "isa.json"
+    isa_json.write_text(investigation.model_dump_json(by_alias=True, exclude_none=True))
+
+    # The data folder only holds the data files of the MetaboLights assay
+    data = tmp_path / "data"
+    data.mkdir()
+    for name in METABOLIGHTS_DATA_FILES:
+        (data / name).write_text(name)
+
+    # Stop at the MetaboLights upload, which receives the mapped data files
+    class ReachedMetaboLights(Exception):
+        pass
+
+    upload = MagicMock(side_effect=ReachedMetaboLights)
+    monkeypatch.setattr(submit_module, "upload_to_metabolights", upload)
+
+    result = CliRunner().invoke(
+        mars_cli.cli,
+        [
+            "--development",
+            "submit",
+            "--credentials-file",
+            "tests/test_credentials_example.json",
+            "--submit-to-biosamples",
+            "False",
+            "--submit-to-ena",
+            "False",
+            "--data-folder",
+            str(data),
+            str(isa_json),
+        ],
+    )
+
+    assert isinstance(result.exception, ReachedMetaboLights), result.output
+    mapped_files = upload.call_args.kwargs["file_paths"]
+    assert sorted(Path(f).name for f in mapped_files) == METABOLIGHTS_DATA_FILES
+
+
+def test_submission_ignores_data_files_of_assays_not_submitted(
+    mars_cli, tmp_path, monkeypatch
+):
+    from mars_lib import submit as submit_module
+
+    class ReachedBioSamples(Exception):
+        pass
+
+    # The ENA assay is not submitted, so its missing data files must not stop the
+    # submission before it reaches BioSamples
+    monkeypatch.setattr(
+        submit_module, "submit_to_biosamples", MagicMock(side_effect=ReachedBioSamples)
+    )
+    with open("tests/test_credentials_example.json") as credentials_file:
+        with pytest.raises(ReachedBioSamples):
+            submit_module.submission(
+                webin_username="",
+                metabolights_username="",
+                metabolights_ftp_username="",
+                credentials_file=credentials_file,
+                isa_json_file=str(TEST_ISA_JSON),
+                target_repositories=["biosamples"],
+                urls={"BIOSAMPLES": {"SUBMISSION": ""}, "WEBIN": {"TOKEN": ""}},
                 file_transfer="ftp",
                 output=str(tmp_path / "out"),
                 data_file_paths=[],
