@@ -283,6 +283,18 @@ def _ids(nodes) -> list[str]:
     return [node.id for node in nodes]
 
 
+def _assert_study_processes_refer_to_study_materials(study, other_output_ids=()):
+    """Every input and output of the study processes is a material that is still in
+    the study (or one of the given other outputs, like a data file)."""
+    materials = study.materials
+    material_ids = set(
+        _ids(materials.sources + materials.samples + materials.otherMaterials)
+    )
+    for process in study.processSequence:
+        assert set(_ids(process.inputs)) <= material_ids
+        assert set(_ids(process.outputs)) <= material_ids | set(other_output_ids)
+
+
 def test_reduce_investigation_removes_unused_study_resources_for_ena():
     study = reduce_investigation_for_target_repo(
         load_investigation(HOLOFOOD_ISA), TargetRepository.ENA.value
@@ -489,10 +501,72 @@ def test_reduce_investigation_removes_study_processes_of_removed_samples():
 
     assert _ids(study.processSequence) == ["#process/sample_collection/3066"]
     assert "#protocol/study_98_2908" in _ids(study.protocols)
-    # Every study process only refers to materials that are still in the study
-    material_ids = set(_ids(study.materials.sources + study.materials.samples))
-    for process in study.processSequence:
-        assert set(_ids(process.inputs + process.outputs)) <= material_ids
+    _assert_study_processes_refer_to_study_materials(study)
+
+
+def test_reduce_investigation_keeps_multi_stage_study_chains():
+    # Sample 3066 (ENA) is prepared in two stages: source 3064 -> sample 'stage-1'
+    # -> sample 3066. Only sample 3066 is used by the ENA assay.
+    investigation = load_investigation(HOLOFOOD_ISA)
+    study = investigation.studies[0]
+    collection_3065, collection_3066 = study.processSequence
+    stage_1 = study.materials.samples[1].model_copy(
+        update={"id": "#sample/stage-1", "name": "stage 1"}
+    )
+    assert _ids(collection_3066.outputs) == ["#sample/3066"]
+    study.materials.samples.append(stage_1)
+    first_stage = collection_3066.model_copy(
+        update={
+            "id": "#process/stage-1",
+            "outputs": [IsaReference.model_validate({"@id": "#sample/stage-1"})],
+        }
+    )
+    collection_3066.inputs = [IsaReference.model_validate({"@id": "#sample/stage-1"})]
+    study.processSequence = [collection_3065, first_stage, collection_3066]
+
+    ena = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    ).studies[0]
+    metabolights = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS.value
+    ).studies[0]
+
+    assert _ids(ena.materials.samples) == ["#sample/3066", "#sample/stage-1"]
+    assert _ids(ena.materials.sources) == ["#source/3064"]
+    assert _ids(ena.processSequence) == [first_stage.id, collection_3066.id]
+    _assert_study_processes_refer_to_study_materials(ena)
+    assert _ids(metabolights.materials.samples) == ["#sample/3065"]
+    assert _ids(metabolights.processSequence) == [collection_3065.id]
+    _assert_study_processes_refer_to_study_materials(metabolights)
+
+
+def test_reduce_investigation_prunes_outputs_of_a_shared_study_process():
+    # One collection process produces both samples, and a data file
+    investigation = load_investigation(HOLOFOOD_ISA)
+    study = investigation.studies[0]
+    collection_3065, collection_3066 = study.processSequence
+    data_file = IsaReference.model_validate({"@id": "#data_file/collection-log"})
+    collection_3065.outputs = collection_3065.outputs + collection_3066.outputs
+    collection_3065.outputs.append(data_file)
+    study.processSequence = [collection_3065]
+
+    ena = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    ).studies[0]
+    metabolights = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS.value
+    ).studies[0]
+
+    assert _ids(ena.processSequence[0].outputs) == [
+        "#sample/3066",
+        "#data_file/collection-log",
+    ]
+    _assert_study_processes_refer_to_study_materials(ena, [data_file.id])
+    assert _ids(metabolights.processSequence[0].outputs) == [
+        "#sample/3065",
+        "#data_file/collection-log",
+    ]
+    _assert_study_processes_refer_to_study_materials(metabolights, [data_file.id])
 
 
 def test_reduce_investigation_follows_previous_process_without_inputs():

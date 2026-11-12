@@ -71,12 +71,15 @@ def reduce_investigation_for_target_repo(
 def remove_unused_study_resources(study: Study) -> None:
     """
     Removes the study level resources that the study's (filtered) assays don't use,
-    in place. The assays' process sequences link the resources together:
-    - samples and other materials that are not an input of a process in an assay;
-    - study processes that don't produce one of the remaining samples, unless a
-      remaining one links back to them (see `_linked_previous_processes`);
-    - sources that are not an input of a remaining study process;
-    - protocols that are not executed by a process in an assay, or by a remaining
+    in place. The assays' process sequences link the resources together: starting
+    from the inputs of the assays' processes, the study process sequence is walked back
+    (see `_upstream_study_processes`). Removed are:
+    - the study processes that don't lead to an input of the assays;
+    - the samples, other materials and sources that are neither an input of the assays,
+      nor an input of a remaining study process;
+    - the outputs of the remaining study processes that refer to a removed sample,
+      other material or source;
+    - the protocols that are not executed by a process in an assay, or by a remaining
       study process.
 
     Args:
@@ -85,38 +88,31 @@ def remove_unused_study_resources(study: Study) -> None:
     assay_processes = [
         process for assay in study.assays for process in assay.processSequence
     ]
-
-    # Filtering out the unused upstream materials
     assay_input_ids = {
         node.id for process in assay_processes for node in process.inputs
     }
-    study.materials.samples = [
-        sample for sample in study.materials.samples if sample.id in assay_input_ids
-    ]
-    study.materials.otherMaterials = [
-        material
-        for material in study.materials.otherMaterials
-        if material.id in assay_input_ids
-    ]
+    study_processes, used_ids = _upstream_study_processes(study, assay_input_ids)
 
-    sample_ids = {sample.id for sample in study.materials.samples}
-    study_processes = [
-        process
-        for process in study.processSequence
-        if any(output.id in sample_ids for output in process.outputs)
-    ]
-    study_processes += _linked_previous_processes(study, study_processes)
-    source_ids = {input.id for process in study_processes for input in process.inputs}
-    study.materials.sources = [
-        source for source in study.materials.sources if source.id in source_ids
-    ]
+    # Filtering out the unused materials
+    materials = study.materials
+    material_ids = {
+        material.id
+        for material in materials.sources + materials.samples + materials.otherMaterials
+    }
+    materials.sources = [m for m in materials.sources if m.id in used_ids]
+    materials.samples = [m for m in materials.samples if m.id in used_ids]
+    materials.otherMaterials = [m for m in materials.otherMaterials if m.id in used_ids]
+    removed_material_ids = material_ids - used_ids
 
-    # Keep only the study processes that lead to the remaining samples (a protocol can
-    # be shared with the processes of removed samples, so it can't decide this)
-    study_process_ids = {process.id for process in study_processes}
-    study.processSequence = [
-        process for process in study.processSequence if process.id in study_process_ids
-    ]
+    # A process can also produce materials that are removed (e.g. one collection process
+    # for the samples of several repositories). Other outputs, like data files, stay.
+    for process in study_processes:
+        process.outputs = [  # type: ignore[assignment]
+            output
+            for output in process.outputs
+            if output.id not in removed_material_ids
+        ]
+    study.processSequence = study_processes
 
     # Filtering the study protocols
     protocol_ids = {
@@ -127,32 +123,49 @@ def remove_unused_study_resources(study: Study) -> None:
     ]
 
 
-def _linked_previous_processes(study: Study, processes: list[Process]) -> list[Process]:
+def _upstream_study_processes(
+    study: Study, material_ids: set[str]
+) -> tuple[list[Process], set[str]]:
     """
-    A step can be split over linked processes, e.g. one with only the source as input and
-    one with only the sample as output. For every process without inputs, follows the
-    'previousProcess' links back until a process with inputs is reached.
+    Walks the study process sequence back from the given materials: keeps the processes
+    that produce one of them, and the materials those processes take as input in turn,
+    so a chain of several steps (e.g. source -> sample -> sample) is kept as a whole.
+
+    A step can also be split over linked processes, e.g. one with only the source as
+    input and one with only the sample as output. So for a kept process without inputs,
+    the process it links back to via 'previousProcess' is kept as well.
 
     Args:
         study (Study): The study that holds the processes.
-        processes (list[Process]): The study processes to start from.
+        material_ids (set[str]): The ids of the materials to start from.
 
     Returns:
-        list[Process]: The study processes that were reached through the links.
+        tuple[list[Process], set[str]]: The kept study processes (in their original
+            order), and the ids of the given materials plus the inputs of those
+            processes.
     """
-    processes_by_id = {process.id: process for process in study.processSequence}
-    linked_processes = []
-    for process in processes:
-        seen = {process.id}
-        while not process.inputs and process.previousProcess is not None:
-            previous = processes_by_id.get(process.previousProcess.id)
-            # Stop at a link to a process outside the study, or a cycle
-            if previous is None or previous.id in seen:
-                break
-            seen.add(previous.id)
-            linked_processes.append(previous)
-            process = previous
-    return linked_processes
+    used_ids = set(material_ids)
+    kept_process_ids: set[str] = set()
+    linked_process_ids: set[str] = set()
+    changed = True
+    while changed:
+        changed = False
+        for process in study.processSequence:
+            if process.id in kept_process_ids:
+                continue
+            if process.id in linked_process_ids or any(
+                output.id in used_ids for output in process.outputs
+            ):
+                kept_process_ids.add(process.id)
+                used_ids |= {node.id for node in process.inputs}
+                if not process.inputs and process.previousProcess is not None:
+                    linked_process_ids.add(process.previousProcess.id)
+                changed = True
+
+    kept_processes = [
+        process for process in study.processSequence if process.id in kept_process_ids
+    ]
+    return kept_processes, used_ids
 
 
 def detect_target_repo_comment(comments: list[Comment]) -> Comment:
