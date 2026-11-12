@@ -380,6 +380,35 @@ def test_reduce_investigation_removes_study_processes_of_removed_protocols():
     assert _ids(metabolights.processSequence) == [collection_3065.id]
 
 
+def test_reduce_investigation_removes_unused_study_other_materials():
+    # Move the other materials of both assays to the study level
+    investigation = load_investigation(HOLOFOOD_ISA)
+    study = investigation.studies[0]
+    study.materials.otherMaterials = [
+        material
+        for assay in study.assays
+        for material in assay.materials.otherMaterials
+    ]
+    assert _ids(study.materials.otherMaterials) == [
+        "#other_material/3067",
+        "#other_material/3207",
+        "#other_material/3208",
+    ]
+
+    ena = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.ENA.value
+    ).studies[0]
+    metabolights = reduce_investigation_for_target_repo(
+        investigation, TargetRepository.METABOLIGHTS.value
+    ).studies[0]
+
+    assert _ids(ena.materials.otherMaterials) == ["#other_material/3067"]
+    assert _ids(metabolights.materials.otherMaterials) == [
+        "#other_material/3207",
+        "#other_material/3208",
+    ]
+
+
 def test_reduce_investigation_keeps_study_processes_of_remaining_protocols():
     # Both samples are collected with the same protocol, which ENA still needs
     study = reduce_investigation_for_target_repo(

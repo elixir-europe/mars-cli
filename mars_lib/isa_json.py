@@ -61,7 +61,7 @@ def remove_unused_study_resources(study: Study) -> None:
     """
     Removes the study level resources that the study's (filtered) assays don't use,
     in place. The assays' process sequences link the resources together:
-    - samples that are not an input of a process in an assay;
+    - samples and other materials that are not an input of a process in an assay;
     - sources that are not an input of a study process that produces one of the
       remaining samples;
     - protocols that are not executed by a process in an assay, or by a study process
@@ -79,6 +79,11 @@ def remove_unused_study_resources(study: Study) -> None:
     }
     study.materials.samples = [
         sample for sample in study.materials.samples if sample.id in assay_input_ids
+    ]
+    study.materials.otherMaterials = [
+        material
+        for material in study.materials.otherMaterials
+        if material.id in assay_input_ids
     ]
 
     sample_ids = {sample.id for sample in study.materials.samples}
