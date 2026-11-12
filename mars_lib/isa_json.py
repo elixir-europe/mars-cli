@@ -74,6 +74,8 @@ def remove_unused_study_resources(study: Study) -> None:
     assay_processes = [
         process for assay in study.assays for process in assay.processSequence
     ]
+
+    # Filtering out the unused upstream materials
     assay_input_ids = {
         node.id for process in assay_processes for node in process.inputs
     }
@@ -87,23 +89,25 @@ def remove_unused_study_resources(study: Study) -> None:
     ]
 
     sample_ids = {sample.id for sample in study.materials.samples}
-    sample_processes = [
+    study_processes = [
         process
         for process in study.processSequence
         if any(output.id in sample_ids for output in process.outputs)
     ]
-    source_ids = {node.id for process in sample_processes for node in process.inputs}
+    source_ids = {input.id for process in study_processes for input in process.inputs}
     study.materials.sources = [
         source for source in study.materials.sources if source.id in source_ids
     ]
 
+    # Filtering the study protocols
     protocol_ids = {
-        process.executesProtocol.id for process in assay_processes + sample_processes
+        process.executesProtocol.id for process in assay_processes + study_processes
     }
     study.protocols = [
         protocol for protocol in study.protocols if protocol.id in protocol_ids
     ]
 
+    # Clean up the study process sequence after dropping the unused protocols
     study.processSequence = [
         process
         for process in study.processSequence
