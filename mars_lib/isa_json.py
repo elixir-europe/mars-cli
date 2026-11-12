@@ -662,7 +662,6 @@ def map_data_files_to_repositories(
     assays = _assays_for_target_repos(investigation, target_repositories)
 
     files_dicts = [{"full_name": f, "short_name": os.path.basename(f)} for f in files]
-    remaining_files = files_dicts.copy()
     for assay in assays:
         target_repo_comment: Comment = detect_target_repo_comment(assay.comments)
         # This is an effect of everything being optional in the Comment model.
@@ -686,28 +685,14 @@ def map_data_files_to_repositories(
                 {files}
                 Please correct the mismatch!"""
                 )
-            else:
-                remaining_files = [
-                    fd for fd in remaining_files if fd["short_name"] != adf
-                ]
 
+        # Files that no assay references are left out of the map, so they
+        # are not submitted.
         df_map[target_repo_comment.value] = [
             fd["full_name"]
             for fd in files_dicts
             if fd["short_name"] in assay_data_files
         ]
-
-    [
-        print_and_log(
-            msg=(
-                f"File '{rf['short_name']}' could not be mapped to any data "
-                f"file in the ISA-JSON. For this reason, it will be skipped "
-                f"during submission!"
-            ),
-            level="warning",
-        )
-        for rf in remaining_files
-    ]
 
     return df_map
 
@@ -733,8 +718,9 @@ class DataFileCheckReport:
 
     def log(self, header: str = "Data file check:") -> None:
         """
-        Logs the report: the counts at INFO level, every unreferenced file as a
-        WARNING and every missing or duplicate data file as an ERROR.
+        Logs the report: the counts at INFO level and every missing or duplicate
+        data file as an ERROR. Unreferenced files are only counted: they are not
+        submitted, which is expected when a target repository is left out.
         """
         print_and_log(
             f"{header}\n"
@@ -742,8 +728,6 @@ class DataFileCheckReport:
             f"- Data files not referenced in the ISA JSON: {len(self.unreferenced)}\n"
             f"- ISA JSON data files without a matching data file: {len(self.missing)}"
         )
-        for file in self.unreferenced:
-            print_and_log(f"Not referenced in the ISA JSON: {file}", level="warning")
         for name in self.missing:
             print_and_log(f"Missing data file: {name}", level="error")
         for name, paths in self.duplicates.items():
