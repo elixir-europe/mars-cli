@@ -139,16 +139,17 @@ class Process(CommentedIsaBase):
     id: str = Field(alias="@id")
     date: str | None = None
     executesProtocol: IsaReference | Protocol
+    # Inputs and outputs are optional: a step may be split over linked processes
+    # (via 'nextProcess' and 'previousProcess'), e.g. one with only inputs and
+    # one with only outputs, or a process may have neither.
     inputs: (
         list[IsaReference] | list[Source] | list[Sample] | list[Material] | list[Data]
-    ) = Field(min_length=1)
+    ) = []
     name: str
     nextProcess: IsaReference | Process | None = Field(
         default=None, json_schema_extra=_allow_empty_link
     )
-    outputs: list[IsaReference] | list[Sample] | list[Material] | list[Data] = Field(
-        min_length=1
-    )
+    outputs: list[IsaReference] | list[Sample] | list[Material] | list[Data] = []
     parameterValues: list[ProcessParameterValue] = []
     performer: str | None = None
     previousProcess: IsaReference | Process | None = Field(

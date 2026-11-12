@@ -205,6 +205,19 @@ def test_process_links_may_be_empty_objects():
     assert process.nextProcess.id == "#process/2"
 
 
+def test_process_inputs_and_outputs_are_optional():
+    # A step split over two linked processes: inputs on the first, outputs on the second
+    assert Process.model_validate(minimal_process(outputs=[])).outputs == []
+    assert Process.model_validate(minimal_process(inputs=[])).inputs == []
+    # A process may also have neither, whether empty or left out
+    process = Process.model_validate(minimal_process(inputs=[], outputs=[]))
+    assert process.inputs == [] and process.outputs == []
+    process = minimal_process()
+    del process["inputs"], process["outputs"]
+    process = Process.model_validate(process)
+    assert process.inputs == [] and process.outputs == []
+
+
 def test_process_inputs_and_outputs_are_references():
     with pytest.raises(ValidationError):
         Process.model_validate(minimal_process(inputs=[{"name": "no id"}]))
@@ -981,10 +994,6 @@ NON_COMPLIANT_TEST_FILES = {
     "MARS/test-data/ARC-ISA-example.json": (
         "ARC ISA-JSON currently does not comply to the MARS specifications "
         "and needs upstream fixes."
-    ),
-    "MARS/test-data/ISA-PTX-TEST/isajson/i_investigation_PTX_Pilot_Daphnia_magna-3-assays.json": (
-        "PTX ISA-JSON does not comply to the MARS specifications yet, "
-        "e.g. an assay without samples."
     ),
 }
 
