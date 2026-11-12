@@ -31,6 +31,10 @@ def reduce_investigation_for_target_repo(
     """
     Filters out assays that are not meant to be sent to the specified target repository.
 
+    For every repository except BioSamples (which receives no assays, but all samples),
+    the study level resources that the remaining assays don't use are filtered out as
+    well (see `remove_unused_study_resources`).
+
     Args:
         input_investigation (Investigation): Input ISA JSON that contains the original information.
         target_repo (TargetRepository): Target repository as a constant.
@@ -39,24 +43,60 @@ def reduce_investigation_for_target_repo(
         Investigation: Filtered ISA JSON.
     """
     filtered_investigation = input_investigation.model_copy(deep=True)
-    new_studies = []
-    studies = filtered_investigation.studies
-    for study in studies:
+    for study in filtered_investigation.studies:
         if target_repo == TargetRepository.BIOSAMPLES.value:
-            filtered_assays = []
+            study.assays = []
         else:
-            assays = study.assays
-            filtered_assays = [
+            study.assays = [
                 assay
-                for assay in assays
+                for assay in study.assays
                 if is_assay_for_target_repo(assay, target_repo)
             ]
+            remove_unused_study_resources(study)
 
-        study.assays = filtered_assays
-        new_studies.append(study)
-
-    filtered_investigation.studies = new_studies
     return filtered_investigation
+
+
+def remove_unused_study_resources(study: Study) -> None:
+    """
+    Removes the study level resources that the study's (filtered) assays don't use,
+    in place. The assays' process sequences link the resources together:
+    - samples that are not an input of a process in an assay;
+    - sources that are not an input of a study process that produces one of the
+      remaining samples;
+    - protocols that are not executed by a process in an assay, or by a study process
+      that produces one of the remaining samples.
+
+    Args:
+        study (Study): The study, of which the assays are already filtered.
+    """
+    assay_processes = [
+        process for assay in study.assays for process in assay.processSequence
+    ]
+    assay_input_ids = {
+        node.id for process in assay_processes for node in process.inputs
+    }
+    study.materials.samples = [
+        sample for sample in study.materials.samples if sample.id in assay_input_ids
+    ]
+
+    sample_ids = {sample.id for sample in study.materials.samples}
+    sample_processes = [
+        process
+        for process in study.processSequence
+        if any(output.id in sample_ids for output in process.outputs)
+    ]
+    source_ids = {node.id for process in sample_processes for node in process.inputs}
+    study.materials.sources = [
+        source for source in study.materials.sources if source.id in source_ids
+    ]
+
+    protocol_ids = {
+        process.executesProtocol.id for process in assay_processes + sample_processes
+    }
+    study.protocols = [
+        protocol for protocol in study.protocols if protocol.id in protocol_ids
+    ]
 
 
 def detect_target_repo_comment(comments: list[Comment]) -> Comment:
