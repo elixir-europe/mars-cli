@@ -73,12 +73,11 @@ def remove_unused_study_resources(study: Study) -> None:
     Removes the study level resources that the study's (filtered) assays don't use,
     in place. The assays' process sequences link the resources together:
     - samples and other materials that are not an input of a process in an assay;
-    - sources that are not an input of a study process that produces one of the
-      remaining samples (or of a process it links back to, see
-      `_linked_previous_processes`);
-    - protocols that are not executed by a process in an assay, or by one of those
-      study processes;
-    - study processes that execute one of the removed protocols.
+    - study processes that don't produce one of the remaining samples, unless a
+      remaining one links back to them (see `_linked_previous_processes`);
+    - sources that are not an input of a remaining study process;
+    - protocols that are not executed by a process in an assay, or by a remaining
+      study process.
 
     Args:
         study (Study): The study, of which the assays are already filtered.
@@ -112,19 +111,19 @@ def remove_unused_study_resources(study: Study) -> None:
         source for source in study.materials.sources if source.id in source_ids
     ]
 
+    # Keep only the study processes that lead to the remaining samples (a protocol can
+    # be shared with the processes of removed samples, so it can't decide this)
+    study_process_ids = {process.id for process in study_processes}
+    study.processSequence = [
+        process for process in study.processSequence if process.id in study_process_ids
+    ]
+
     # Filtering the study protocols
     protocol_ids = {
         process.executesProtocol.id for process in assay_processes + study_processes
     }
     study.protocols = [
         protocol for protocol in study.protocols if protocol.id in protocol_ids
-    ]
-
-    # Clean up the study process sequence after dropping the unused protocols
-    study.processSequence = [
-        process
-        for process in study.processSequence
-        if process.executesProtocol.id in protocol_ids
     ]
 
 

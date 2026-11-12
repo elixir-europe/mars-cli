@@ -480,16 +480,19 @@ def test_reduce_investigation_removes_unused_study_other_materials():
     ]
 
 
-def test_reduce_investigation_keeps_study_processes_of_remaining_protocols():
-    # Both samples are collected with the same protocol, which ENA still needs
+def test_reduce_investigation_removes_study_processes_of_removed_samples():
+    # Both samples are collected with the same protocol, which ENA still needs: the
+    # collection of the removed sample 3065 must go anyway
     study = reduce_investigation_for_target_repo(
         load_investigation(HOLOFOOD_ISA), TargetRepository.ENA.value
     ).studies[0]
 
-    assert _ids(study.processSequence) == [
-        "#process/sample_collection/3065",
-        "#process/sample_collection/3066",
-    ]
+    assert _ids(study.processSequence) == ["#process/sample_collection/3066"]
+    assert "#protocol/study_98_2908" in _ids(study.protocols)
+    # Every study process only refers to materials that are still in the study
+    material_ids = set(_ids(study.materials.sources + study.materials.samples))
+    for process in study.processSequence:
+        assert set(_ids(process.inputs + process.outputs)) <= material_ids
 
 
 def test_reduce_investigation_follows_previous_process_without_inputs():
@@ -531,9 +534,9 @@ def test_reduce_investigation_follows_previous_process_without_inputs():
 
     assert _ids(ena.materials.sources) == ["#source/3064"]
     assert "#protocol/pre_collection" in _ids(ena.protocols)
-    assert {"#process/split/1", "#process/split/2"} <= set(_ids(ena.processSequence))
+    assert _ids(ena.processSequence) == ["#process/split/1", "#process/split/2"]
     assert "#protocol/pre_collection" not in _ids(metabolights.protocols)
-    assert "#process/split/1" not in _ids(metabolights.processSequence)
+    assert _ids(metabolights.processSequence) == [collection_3065.id]
 
 
 @pytest.mark.parametrize(
