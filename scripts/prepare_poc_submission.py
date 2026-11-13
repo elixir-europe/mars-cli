@@ -65,16 +65,16 @@ def ensure_settings_ini() -> Path:
         development-submission-url = http://localhost:8032/isabiosamples/submit
 
         [metabolights]
-        "production-url": "https://www.ebi.ac.uk/metabolights/ws3/version"
-        "production-submission-url": "https://www.ebi.ac.uk/metabolights/ws/provisional-studies/isa-json-submission"
-        "production-initiation-url": "https://www.ebi.ac.uk/metabolights/ws"
-        "production-auth-url": "https://www.ebi.ac.uk/metabolights/iam/realms/metabolights/protocol/openid-connect/token"
-        "production-auth-client-name": "swagger-ui"
-        "development-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws3/version"
-        "development-submission-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws/provisional-studies/isa-json-submission"
-        "development-initiation-url": "https://wwwdev.ebi.ac.uk/metabolights/test/ws"
-        "development-auth-url": "https://wwwdev.ebi.ac.uk/metabolights/test/iam/realms/metabolights/protocol/openid-connect/token"
-        "development-auth-client-name": "swagger-ui-test"
+        production-url = https://www.ebi.ac.uk/metabolights/ws3/version
+        production-submission-url = https://www.ebi.ac.uk/metabolights/ws/provisional-studies/isa-json-submission
+        production-initiation-url = https://www.ebi.ac.uk/metabolights/ws
+        production-auth-url = https://www.ebi.ac.uk/metabolights/iam/realms/metabolights/protocol/openid-connect/token
+        production-auth-client-name = swagger-ui
+        development-url = https://wwwdev.ebi.ac.uk/metabolights/test/ws3/version
+        development-submission-url = https://wwwdev.ebi.ac.uk/metabolights/test/ws/provisional-studies/isa-json-submission
+        development-initiation-url = https://wwwdev.ebi.ac.uk/metabolights/test/ws
+        development-auth-url = https://wwwdev.ebi.ac.uk/metabolights/test/iam/realms/metabolights/protocol/openid-connect/token
+        development-auth-client-name = swagger-ui-test
         """
         ).strip()
         + "\n"
