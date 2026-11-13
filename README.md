@@ -119,6 +119,18 @@ development-url = http://localhost:8032/isabiosamples
 development-submission-url = http://localhost:8032/isabiosamples/submit
 production-url = https://www.ebi.ac.uk/biosamples/samples/
 production-submission-url = https://www.ebi.ac.uk/biosamples/samples/
+
+[metabolights]
+production-url = https://www.ebi.ac.uk/metabolights/ws3/version
+production-submission-url = https://www.ebi.ac.uk/metabolights/ws/isa-json/submit
+production-initiation-url = https://www.ebi.ac.uk/metabolights/ws/isa-json/initiate
+production-auth-url = https://www.ebi.ac.uk/metabolights/iam/realms/metabolights/protocol/openid-connect/token
+production-auth-client-name = swagger-ui
+development-url = https://wwwdev.ebi.ac.uk/metabolights/test/ws3/version
+development-submission-url = https://wwwdev.ebi.ac.uk/metabolights/test/ws/isa-json/submit
+development-initiation-url = https://wwwdev.ebi.ac.uk/metabolights/test/ws/isa-json/initiate
+development-auth-url = https://wwwdev.ebi.ac.uk/metabolights/test/iam/realms/metabolights/protocol/openid-connect/token
+development-auth-client-name = swagger-ui-test
 ```
 
 
@@ -147,7 +159,7 @@ Each of the target repositories have a set of settings:
 - development-url: URL to the development server when performing a health-check
 - development-submission-url: URL to the development server when performing a submission
 - production-url: URL to the production server when performing a health-check
-- production-submission-url: URL to the production server when performing a submissionW
+- production-submission-url: URL to the production server when performing a submission
 
 ENA and MetaboLights also have a `development-study-page-url` and `production-study-page-url`: the base URL of their
 study pages, used to link the submitted studies to the BioSamples records (see
