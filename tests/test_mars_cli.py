@@ -425,3 +425,70 @@ def test_submission_fails_before_submitting_when_a_repository_has_no_assays(
                 data_file_paths=sorted(str(f) for f in data.iterdir()),
                 config=ConfigParser(),
             )
+
+
+@pytest.mark.parametrize("failure", ["client_error", "no_receipt"])
+def test_submit_exits_with_an_error_when_metabolights_fails(
+    mars_cli, tmp_path, monkeypatch, caplog, failure
+):
+    """A failed MetaboLights submission is logged without stopping the run, but the
+    command must still exit with an error (after writing the output ISA JSON)."""
+    from mars_lib import submit as submit_module
+    from mars_lib.models.abstract_repository_client import (
+        RepositoryConfig,
+        RepositoryConfigError,
+        Token,
+    )
+    from mars_lib.repositories.metabolights_client import MetaboLightsRepositoryClient
+
+    data = tmp_path / "data"
+    data.mkdir()
+    for name in METABOLIGHTS_DATA_FILES:
+        (data / name).write_text(name)
+
+    repository_client = MagicMock(spec=MetaboLightsRepositoryClient)
+    repository_client.repository_name = "metabolights"
+    repository_client.reduce_investigation.side_effect = lambda input_investigation: (
+        input_investigation
+    )
+    repository_client.get_repository_config.return_value = RepositoryConfig(
+        credentials={"username": "test", "password": "test"}, settings={}
+    )
+    if failure == "client_error":
+        repository_client.get_token.side_effect = RepositoryConfigError(
+            "url is not defined for metabolights"
+        )
+    else:
+        repository_client.get_token.return_value = Token(token="test-token")
+        repository_client.initiate_submission.return_value = None
+        repository_client.upload_isa_json.return_value = None
+    monkeypatch.setattr(
+        submit_module,
+        "MetaboLightsRepositoryClient",
+        MagicMock(return_value=repository_client),
+    )
+
+    output = tmp_path / "output"
+    result = CliRunner().invoke(
+        mars_cli.cli,
+        [
+            "--development",
+            "submit",
+            "--credentials-file",
+            "tests/test_credentials_example.json",
+            "--submit-to-biosamples",
+            "False",
+            "--submit-to-ena",
+            "False",
+            "--output",
+            str(output),
+            "--data-folder",
+            str(data),
+            "MARS/test-data/metabolights-lcms.json",
+        ],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert isinstance(result.exception, SystemExit)
+    assert "Submission failed for: metabolights" in _records(caplog, logging.ERROR)[-1]
+    assert Path(f"{output}.json").exists()

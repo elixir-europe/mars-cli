@@ -47,6 +47,11 @@ from mars_lib.ftp_upload import FTPUploader
 from pathlib import Path
 
 
+class SubmissionError(Exception):
+    """A submission to one or more target repositories failed. The errors are
+    already logged; raised after the output ISA JSON is written."""
+
+
 def save_step_to_file(time_stamp: float, filename: str, investigation: Investigation):
     dir_path = f"tmp/{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}"
     os.makedirs(dir_path, exist_ok=True)
@@ -139,6 +144,9 @@ def submission(
     # Abort before submitting anything when a target repository has nothing to receive
     for repo in target_repositories:
         reduce_investigation_for_target_repo(investigation, repo)
+
+    # Repositories whose submission failed without raising; reported at the end
+    failed_repositories: list[str] = []
 
     if TargetRepository.BIOSAMPLES.value in target_repositories:
         # Submit to Biosamples
@@ -286,6 +294,7 @@ def submission(
             # 6- Evaluate receipt and update investigation (if it is successful)
             ################################################################################
             if not mars_receipt:
+                failed_repositories.append(repository_name)
                 print_and_log(
                     f"Submission to {repository_name} is failed.", level="error"
                 )
@@ -297,12 +306,14 @@ def submission(
                 if is_development:
                     save_step_to_file(time_stamp, "3_after_metabolights", investigation)
             else:
+                failed_repositories.append(repository_name)
                 print_and_log(f"Submission to {repository_name} failed.", level="error")
                 for error in mars_receipt.errors or []:
                     print_and_log(
                         f"{error.type}: {error.path}, {error.message}", level="error"
                     )
         except RepositoryClientError as err:
+            failed_repositories.append(repository_name)
             print_and_log(
                 f"Repository client error for {repository_name} submission. "
                 f"{err.__class__.__name__}: {err.args}",
@@ -335,6 +346,12 @@ def submission(
     with open(f"{output}.json", "w") as f:
         f.write(
             investigation.model_dump_json(by_alias=True, exclude_none=True, indent=2)
+        )
+
+    if failed_repositories:
+        raise SubmissionError(
+            f"Submission failed for: {', '.join(failed_repositories)}. "
+            "See the errors above."
         )
 
 

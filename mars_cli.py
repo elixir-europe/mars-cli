@@ -12,7 +12,7 @@ from mars_lib.credential import CredentialManager
 from mars_lib.isa_json import check_data_files, load_investigation
 from mars_lib.logging import init_logging, print_and_log
 from mars_lib.settings import generate_config
-from mars_lib.submit import submission
+from mars_lib.submit import SubmissionError, submission
 from mars_lib.target_repo import TargetRepository
 
 # Load CLI configuration
@@ -168,19 +168,23 @@ def submit(
     if is_development is None:
         is_development = os.getenv("MARS_DEBUG") in ["1", 1]
 
-    submission(
-        webin_username,
-        metabolights_username,
-        credentials_file,
-        isa_json_file.name,
-        target_repositories,
-        urls_dict,
-        file_transfer,
-        output,
-        data_file_paths=data_file_paths,
-        config=config,
-        is_development=is_development,
-    )
+    try:
+        submission(
+            webin_username,
+            metabolights_username,
+            credentials_file,
+            isa_json_file.name,
+            target_repositories,
+            urls_dict,
+            file_transfer,
+            output,
+            data_file_paths=data_file_paths,
+            config=config,
+            is_development=is_development,
+        )
+    except SubmissionError as err:
+        print_and_log(str(err), level="error")
+        sys.exit(1)
 
 
 @cli.command()
