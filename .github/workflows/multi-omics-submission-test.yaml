@@ -92,7 +92,6 @@ jobs:
           set -euo pipefail
 
           mars-cli --development submit \
-            --submit-to-metabolights False \
             --file-transfer ftp \
             --output "output_holofood_${{ github.run_id }}_${{ github.run_attempt }}" \
             --data-folder poc_work/holofood/data \
