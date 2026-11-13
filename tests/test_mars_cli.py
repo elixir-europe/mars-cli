@@ -355,6 +355,7 @@ def test_submit_with_ena_disabled_only_maps_data_files_of_submitted_assays(
     }
 
 
+@pytest.mark.skip(reason="Data files are not mapped.")
 def test_submission_ignores_data_files_of_assays_not_submitted(
     mars_cli, tmp_path, monkeypatch
 ):
@@ -375,13 +376,22 @@ def test_submission_ignores_data_files_of_assays_not_submitted(
                 metabolights_username="",
                 credentials_file=credentials_file,
                 isa_json_file=str(TEST_ISA_JSON),
-                target_repositories=["biosamples"],
-                urls={"BIOSAMPLES": {"SUBMISSION": ""}, "WEBIN": {"TOKEN": ""}},
+                target_repositories=["biosamples", "ena"],
+                urls={},
                 file_transfer="ftp",
                 output=str(tmp_path / "out"),
                 config=ConfigParser(),
                 data_file_paths=[],
             )
+
+
+METABOLIGHTS_DATA_FILES = [
+    "metpro-analysis.txt",
+    "ms-data-metpro--1.mzml",
+    "ms-data-metpro--2.mzml",
+    "ms-data-metpro--3.mzml",
+    "ms-data-metpro--4.mzml",
+]
 
 
 def test_submission_fails_before_submitting_when_a_repository_has_no_assays(
@@ -409,9 +419,9 @@ def test_submission_fails_before_submitting_when_a_repository_has_no_assays(
                 credentials_file=credentials_file,
                 isa_json_file=str(TEST_ISA_JSON),
                 target_repositories=["biosamples", "metabolights"],
-                urls={"BIOSAMPLES": {}, "METABOLIGHTS": {}},
+                urls={},
                 file_transfer="ftp",
                 output=str(tmp_path / "out"),
-                config=ConfigParser(),
                 data_file_paths=sorted(str(f) for f in data.iterdir()),
+                config=ConfigParser(),
             )

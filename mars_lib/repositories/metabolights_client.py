@@ -265,15 +265,15 @@ class MetaboLightsRepositoryClient(BaseRepositoryClient):
         files = {"isa_json_file": ("isa_json.json", json_file)}
         response: None | RepositoryResponse = None
         try:
-            submission_response = requests.put(
+            submission_response = requests.post(
                 submission_url,
                 headers=headers,
                 files=files,
                 timeout=120,
             )
             submission_response.raise_for_status()
-
-            response = RepositoryResponse.model_validate(submission_response.json())
+            response_dict = submission_response.json()
+            response = RepositoryResponse.model_validate(response_dict)
 
         except Exception as exc:
             raise RepositorySubmissionError(self.repository_name, str(exc))
@@ -281,7 +281,7 @@ class MetaboLightsRepositoryClient(BaseRepositoryClient):
         try:
             headers["task-id"] = response.task_id
             submission_poll_url = context.repository_config.settings.get(
-                "submission-poll-url"
+                "submission-url"
             )
             for _ in range(context.submission_max_retry):
                 submission_response = requests.get(

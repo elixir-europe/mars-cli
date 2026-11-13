@@ -136,9 +136,9 @@ def submission(
     ):
         raise ValueError("No target repository selected.")
 
-    # Validate every selected repository before starting any submission.
-    for repository in target_repositories:
-        reduce_investigation_for_target_repo(investigation, repository)
+    # Abort before submitting anything when a target repository has nothing to receive
+    for repo in target_repositories:
+        reduce_investigation_for_target_repo(investigation, repo)
 
     if TargetRepository.BIOSAMPLES.value in target_repositories:
         # Submit to Biosamples
@@ -248,32 +248,32 @@ def submission(
                     repository_name=repository_name,
                     initiation_response=initiation_response,
                 )
+                with open(isa_json_file, "w") as f:
+                    f.write(
+                        investigation.model_dump_json(
+                            by_alias=True, exclude_none=True, indent=2
+                        )
+                    )
+
                 update_initiation_comments(
                     investigation=context.filtered_investigation,
                     repository_name=repository_name,
                     initiation_response=initiation_response,
                 )
+                context.submission_id = initiation_response.submission_id
                 # Update FTP configuration
                 if initiation_response.ftp_credentials:
                     repository_data_files = data_file_map.get(repository_name)
-                    data_files_root_path = None
-                    if repository_data_files:
-                        data_file_parents = [
-                            str(Path(data_file).parent)
-                            for data_file in repository_data_files
-                        ]
-                        if len(set(data_file_parents)) > 1:
-                            data_files_root_path = os.path.commonpath(data_file_parents)
                     context.data_file_transfer_config = DataFileTransferConfig(
                         transfer_protocol=DataTransferProtocol(file_transfer),
                         credentials=initiation_response.ftp_credentials,
-                        # data_file_paths=repository_data_files,
-                        data_files_root_path=data_files_root_path,
+                        data_file_paths=repository_data_files,
+                        data_files_root_path=None,
                     )
             ################################################################################
             # 4- Upload data files
             ################################################################################
-
+            repository_client.upload_data_files(context)
             ################################################################################
             # 5- Submit ISA-JSON with async way, if there is not receipt adaptor will raise
             #    TooEarlyError
@@ -333,7 +333,9 @@ def submission(
 
     # Return the updated ISA JSON
     with open(f"{output}.json", "w") as f:
-        f.write(investigation.model_dump_json(by_alias=True, exclude_none=True))
+        f.write(
+            investigation.model_dump_json(by_alias=True, exclude_none=True, indent=2)
+        )
 
 
 def submit_to_biosamples(

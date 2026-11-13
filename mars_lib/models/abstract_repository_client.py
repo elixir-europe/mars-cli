@@ -2,10 +2,12 @@ import abc
 from configparser import ConfigParser
 import datetime
 import enum
+import pathlib
 from typing import Annotated
 
 from pydantic import Field, BaseModel, ConfigDict
 
+from mars_lib.ftp_upload import FTPUploader
 from mars_lib.models.isa_json import Comment, Investigation
 from mars_lib.models.repository_response import RepositoryResponse
 from mars_lib.target_repo import TARGET_REPO_KEY
@@ -188,6 +190,16 @@ class BaseRepositoryClient(abc.ABC):
     def upload_isa_json(
         self, context: SubmissionContext, repository_token: None | Token
     ) -> RepositoryResponse: ...
+
+    def upload_data_files(self, context: SubmissionContext) -> None:
+        credentials = context.data_file_transfer_config.credentials
+        data_file_paths = [
+            pathlib.Path(x) for x in context.data_file_transfer_config.data_file_paths
+        ]
+        uploader = FTPUploader(
+            credentials.host, credentials.username, credentials.password
+        )
+        uploader.upload(data_file_paths, target_location=credentials.upload_path)
 
     def reduce_investigation(self, input_investigation: Investigation) -> Investigation:
         """
