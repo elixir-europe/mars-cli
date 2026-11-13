@@ -240,7 +240,7 @@ class MetaboLightsRepositoryClient(BaseRepositoryClient):
         self, context: SubmissionContext, repository_token: None | Token
     ) -> RepositoryResponse | None:
         self._check_context(context)
-
+        settings = context.repository_config.settings or {}
         if not repository_token or not repository_token.token:
             raise RepositorySubmissionError(
                 "Token is required for MetaboLights Submission"
@@ -250,7 +250,7 @@ class MetaboLightsRepositoryClient(BaseRepositoryClient):
             raise RepositorySubmissionError("submission-id is required")
 
         token = repository_token.token
-        submission_url = context.repository_config.settings.get("submission-url")
+        submission_url = settings.get("submission-url")
         headers = {
             "accept": "application/json",
             "Authorization": f"Bearer {token}",
@@ -280,9 +280,7 @@ class MetaboLightsRepositoryClient(BaseRepositoryClient):
         result: None | RepositoryResponse = None
         try:
             headers["task-id"] = response.task_id
-            submission_poll_url = context.repository_config.settings.get(
-                "submission-url"
-            )
+            submission_poll_url = settings.get("submission-url", "") or ""
             for _ in range(context.submission_max_retry):
                 submission_response = requests.get(
                     submission_poll_url,

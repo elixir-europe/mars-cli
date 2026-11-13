@@ -555,10 +555,9 @@ def update_initiation_comments(
     investigation: Investigation,
     repository_name: str,
     initiation_response: InitiationResponse,
-) -> Investigation:
+) -> None:
     for study in investigation.studies or []:
-        for item in study.assays or []:
-            assay: Assay = item
+        for assay in study.assays or []:
             repository_comments = [
                 x for x in assay.comments or [] if x.name == TARGET_REPO_KEY
             ]
@@ -581,12 +580,16 @@ def update_initiation_comments(
                         name=SUBMISSION_ID_KEY, value=initiation_response.submission_id
                     )
                 )
-
-            for item in initiation_response.assay_comments or []:
+            assay_comments = (
+                initiation_response.assay_comments
+                if initiation_response.assay_comments
+                else {}
+            )
+            for item in assay_comments or {}:
                 new_comments.append(
                     Comment(
                         name=item,
-                        value=initiation_response.assay_comments[item] or "",
+                        value=assay_comments.get(item) or "",
                     )
                 )
 

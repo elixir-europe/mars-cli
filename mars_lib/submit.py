@@ -268,7 +268,7 @@ def submission(
                         transfer_protocol=DataTransferProtocol(file_transfer),
                         credentials=initiation_response.ftp_credentials,
                         data_file_paths=repository_data_files,
-                        data_files_root_path=None,
+                        data_root_folder=None,
                     )
             ################################################################################
             # 4- Upload data files

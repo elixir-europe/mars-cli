@@ -26,6 +26,9 @@ class RepositoryConfigError(RepositoryClientError): ...
 class RepositoryInitiationError(RepositoryClientError): ...
 
 
+class RepositoryDataUploadError(RepositoryClientError): ...
+
+
 class RepositorySubmissionError(RepositoryClientError): ...
 
 
@@ -76,11 +79,11 @@ class ExecutionHistory(AbstractClientModel):
 
 class RepositoryConfig(AbstractClientModel):
     credentials: Annotated[
-        dict[str, None | str],
+        None | dict[str, None | str],
         Field(description="Credentials associated with this submission."),
     ] = None
     settings: Annotated[
-        dict[str, None | str],
+        None | dict[str, None | str],
         Field(description="Settings associated with this submission."),
     ] = None
 
@@ -192,9 +195,20 @@ class BaseRepositoryClient(abc.ABC):
     ) -> RepositoryResponse: ...
 
     def upload_data_files(self, context: SubmissionContext) -> None:
+        if (
+            not context.data_file_transfer_config
+            or not context.data_file_transfer_config.credentials
+        ):
+            raise RepositoryDataUploadError(
+                "metabolights",
+                context.submission_id,
+                "FTP credentials are not defined.",
+            )
+
         credentials = context.data_file_transfer_config.credentials
         data_file_paths = [
-            pathlib.Path(x) for x in context.data_file_transfer_config.data_file_paths
+            pathlib.Path(x)
+            for x in context.data_file_transfer_config.data_file_paths or []
         ]
         uploader = FTPUploader(
             credentials.host, credentials.username, credentials.password
