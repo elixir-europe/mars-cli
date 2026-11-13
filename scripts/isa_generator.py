@@ -8,6 +8,17 @@ import gzip
 import hashlib
 from typing import Any
 
+# Data-file comments for the attributes of ENA's FILE element, named like those
+# attributes (as the MARS ENA adapter reads them), with the spellings that older
+# ISA-JSON used. The older spellings are removed when a comment is set, so a template
+# that still uses them does not end up with two conflicting values.
+DATA_FILE_COMMENT_LEGACY_NAMES = {
+    "filename": ("file name", "file_name"),
+    "filetype": ("file type", "file_type"),
+    "checksum": ("file checksum",),
+    "checksum_method": ("checksum type",),
+}
+
 
 def _timestamp_suffix() -> str:
     """Unique suffix for this run (used for data file names)."""
@@ -84,6 +95,19 @@ def _ensure_comment(comments: list[dict[str, Any]], name: str, value: str) -> No
     comments.append({"name": name, "value": value})
 
 
+def _set_data_file_comment(
+    comments: list[dict[str, Any]], name: str, value: str
+) -> None:
+    """Set a data-file comment, dropping any comment under an older spelling."""
+    legacy_names = DATA_FILE_COMMENT_LEGACY_NAMES[name]
+    comments[:] = [
+        c
+        for c in comments
+        if not (isinstance(c, dict) and c.get("name") in legacy_names)
+    ]
+    _ensure_comment(comments, name, value)
+
+
 def _update_datafiles_with_generated_files(
     assays: list[dict[str, Any]],
     data_dir: Path,
@@ -103,12 +127,13 @@ def _update_datafiles_with_generated_files(
 
       - Update the dataFiles entry:
           * "name" = new file name
-          * in "comments":
-              - "file name"       -> new file name
-              - "file type"       -> the preserved extension
-              - "file checksum"   -> MD5 of the generated file
+          * in "comments", named like the attributes of ENA's FILE element:
+              - "filename"        -> new file name
+              - "filetype"        -> "fastq", or the preserved extension
+              - "checksum"        -> MD5 of the generated file
               - "checksum_method" -> "MD5"
-            (existing "accession", "submission date", etc. are kept as-is)
+            (older spellings such as "file checksum" are removed; existing
+            "accession", "submission date", etc. are kept as-is)
     """
     generated_paths: list[Path] = []
     suffix = _timestamp_suffix()
@@ -147,15 +172,15 @@ def _update_datafiles_with_generated_files(
                 comments = []
                 df_json["comments"] = comments
 
-            _ensure_comment(comments, "file name", new_name)
             file_type = (
                 "fastq"
                 if new_name.lower().endswith((".fastq.gz", ".fq.gz"))
                 else Path(new_name).suffix.lstrip(".") or "data"
             )
-            _ensure_comment(comments, "file type", file_type)
-            _ensure_comment(comments, "file checksum", md5)
-            _ensure_comment(comments, "checksum_method", "MD5")
+            _set_data_file_comment(comments, "filename", new_name)
+            _set_data_file_comment(comments, "filetype", file_type)
+            _set_data_file_comment(comments, "checksum", md5)
+            _set_data_file_comment(comments, "checksum_method", "MD5")
 
             generated_paths.append(file_path)
             updated_count += 1
@@ -176,7 +201,8 @@ def generate_investigation_with_data(
       3. For each data file (or the first n_files when limited), generate UNIQUE
          files with preserved extensions and update:
            - dataFiles[i]["name"]
-           - dataFiles[i]["comments"] entries for file name, type, checksum, method.
+           - dataFiles[i]["comments"] filename, filetype, checksum and
+             checksum_method.
       4. Write the resulting ISA-JSON to work_dir / 'isa.json'.
 
     We DO NOT change other identifiers or comments (including 'target_repository').
