@@ -248,12 +248,12 @@ def submission(
                     repository_name=repository_name,
                     initiation_response=initiation_response,
                 )
-                with open(isa_json_file, "w") as f:
-                    f.write(
-                        investigation.model_dump_json(
-                            by_alias=True, exclude_none=True, indent=2
-                        )
-                    )
+                # with open(isa_json_file, "w") as f:
+                #     f.write(
+                #         investigation.model_dump_json(
+                #             by_alias=True, exclude_none=True, indent=2
+                #         )
+                #     )
 
                 update_initiation_comments(
                     investigation=context.filtered_investigation,
