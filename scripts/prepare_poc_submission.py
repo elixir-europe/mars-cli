@@ -6,12 +6,12 @@ Prepare the PoC environments for MARS-CLI (no pytest, no run script):
 - Generate an ISA-JSON from each configured template, where:
     * dataFiles entries are updated to point to UNIQUE generated files while
       preserving their original extensions
-    * 'file name', 'file type', 'file checksum', 'checksum_method'
+    * 'filename', 'filetype', 'checksum', 'checksum_method'
       comments are updated accordingly (MD5 over the .fastq.gz)
 - Create poc_work/credentials.json from environment variables
 
-Set ``HOLOFOOD_ISA_TEMPLATE_PATH`` to prepare the additional HoloFood
-submission alongside ``ISA_TEMPLATE_PATH``.
+Set ``HOLOFOOD_ISA_TEMPLATE_PATH`` and/or ``PTX_ISA_TEMPLATE_PATH`` to prepare
+the additional HoloFood and PTX submissions alongside ``ISA_TEMPLATE_PATH``.
 
 The GitHub Action (or you, locally) will then call mars-cli using:
 
@@ -31,6 +31,13 @@ import dotenv
 dotenv.load_dotenv()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+# Additional submissions, each prepared when its environment variable is set:
+# submission name -> (label, environment variable with the ISA template path)
+EXTRA_SUBMISSIONS = {
+    "holofood": ("HoloFood", "HOLOFOOD_ISA_TEMPLATE_PATH"),
+    "ptx": ("PTX", "PTX_ISA_TEMPLATE_PATH"),
+}
 
 
 def ensure_settings_ini() -> Path:
@@ -127,14 +134,16 @@ def main() -> None:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     isa_templates = {"multi-omics": resolve_isa_template()}
-    holofood_template = os.environ.get("HOLOFOOD_ISA_TEMPLATE_PATH")
-    if holofood_template:
-        holofood_path = Path(holofood_template)
-        if not holofood_path.exists():
+    for submission_name, (label, env_var) in EXTRA_SUBMISSIONS.items():
+        template = os.environ.get(env_var)
+        if not template:
+            continue
+        template_path = Path(template)
+        if not template_path.exists():
             raise FileNotFoundError(
-                f"HoloFood ISA template not found at {holofood_path}"
+                f"{label} ISA template not found at {template_path}"
             )
-        isa_templates["holofood"] = holofood_path
+        isa_templates[submission_name] = template_path
 
     prepared_submissions = []
     for submission_name, isa_template in isa_templates.items():

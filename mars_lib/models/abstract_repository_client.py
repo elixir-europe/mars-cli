@@ -271,11 +271,20 @@ class BaseRepositoryClient(abc.ABC):
                 elif not item.startswith(("development-", "production-")):
                     repository_settings[item] = val
 
-        if is_development:
-            credentials_key = f"{key}-development"
-            repository_credentials = credentials.get(credentials_key)
-        else:
-            repository_credentials = credentials.get(credentials_key) or {}
+        # Development credentials ('<key>-development') are optional: without
+        # them, the regular '<key>' credentials are used.
+        credentials = credentials or {}
+        repository_credentials = (
+            is_development and credentials.get(f"{key}-development")
+        ) or credentials.get(key)
+        if not repository_credentials:
+            expected = (
+                f"'{key}-development' or '{key}'" if is_development else f"'{key}'"
+            )
+            raise RepositoryConfigError(
+                f"No {self.repository_name} credentials found: "
+                f"expected a {expected} entry in the credentials"
+            )
 
         return RepositoryConfig(
             credentials=repository_credentials, settings=repository_settings

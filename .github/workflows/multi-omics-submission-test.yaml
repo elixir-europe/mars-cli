@@ -17,6 +17,7 @@ jobs:
       REPOSITORY_SERVICES_PATH: ${{ github.workspace }}/MARS/repository-services
       ISA_TEMPLATE_PATH: ${{ github.workspace }}/MARS/test-data/ena-complete.json
       HOLOFOOD_ISA_TEMPLATE_PATH: ${{ github.workspace }}/MARS/test-data/HoloFoodinISA_v1.0.json
+      PTX_ISA_TEMPLATE_PATH: ${{ github.workspace }}/MARS/test-data/i_investigation_PTX_Pilot_Daphnia_magna_valid.json
 
       # Credentials from GitHub secrets
       WEBIN_USERNAME: ${{ secrets.WEBIN_USERNAME }}
@@ -91,12 +92,23 @@ jobs:
           set -euo pipefail
 
           mars-cli --development submit \
-            --submit-to-metabolights False \
             --file-transfer ftp \
             --output "output_holofood_${{ github.run_id }}_${{ github.run_attempt }}" \
             --data-folder poc_work/holofood/data \
             --credentials-file ./poc_work/credentials.json \
             poc_work/holofood/isa.json
+
+      - name: Submit PTX ISA JSON
+        run: |
+          set -euo pipefail
+
+          mars-cli --development submit \
+            --submit-to-metabolights False \
+            --file-transfer ftp \
+            --output "output_ptx_${{ github.run_id }}_${{ github.run_attempt }}" \
+            --data-folder poc_work/ptx/data \
+            --credentials-file ./poc_work/credentials.json \
+            poc_work/ptx/isa.json
 
       - name: Collect repository-service logs
         if: always()
