@@ -22,10 +22,8 @@ jobs:
       # Credentials from GitHub secrets
       WEBIN_USERNAME: ${{ secrets.WEBIN_USERNAME }}
       WEBIN_PASSWORD: ${{ secrets.WEBIN_PASSWORD }}
-      METABOLIGHTS_METADATA_USERNAME: ${{ secrets.METABOLIGHTS_METADATA_USERNAME }}
-      METABOLIGHTS_METADATA_PASSWORD: ${{ secrets.METABOLIGHTS_METADATA_PASSWORD }}
-      METABOLIGHTS_DATA_USERNAME: ${{ secrets.METABOLIGHTS_DATA_USERNAME }}
-      METABOLIGHTS_DATA_PASSWORD: ${{ secrets.METABOLIGHTS_DATA_PASSWORD }}
+      METABOLIGHTS_USERNAME: ${{ secrets.METABOLIGHTS_USERNAME }}
+      METABOLIGHTS_PASSWORD: ${{ secrets.METABOLIGHTS_PASSWORD }}
 
     steps:
       - name: Checkout MARS (for repository-services + test-data)
@@ -94,7 +92,6 @@ jobs:
           set -euo pipefail
 
           mars-cli --development submit \
-            --submit-to-metabolights False \
             --file-transfer ftp \
             --output "output_holofood_${{ github.run_id }}_${{ github.run_attempt }}" \
             --data-folder poc_work/holofood/data \
@@ -138,4 +135,3 @@ jobs:
         working-directory: ${{ env.REPOSITORY_SERVICES_PATH }}
         run: |
           docker compose down --volumes
-    

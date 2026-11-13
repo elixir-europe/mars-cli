@@ -2,40 +2,40 @@
 
 The MARS-CLI tool is a powerful interface for submitting metadata and associated files to various biological repository services like ENA, BioSamples, and MetaboLights. This command-line tool is useful for managing and validating metadata submissions in a ISA-JSON, as well as for automating aspects of repository submissions.
 
-## Main Steps of MARS-CLI  
+## Main Steps of MARS-CLI
 
-1. **Ingesting and Validating the ISA-JSON**  
-MARS-CLI requires certain mandatory fields beyond the standard ISA specification (e.g., `target_repository` as a comment). Upon ingestion, the ISA-JSON is loaded into memory and validated using Pydantic to ensure it meets these requirements.  
+1. **Ingesting and Validating the ISA-JSON**
+MARS-CLI requires certain mandatory fields beyond the standard ISA specification (e.g., `target_repository` as a comment). Upon ingestion, the ISA-JSON is loaded into memory and validated using Pydantic to ensure it meets these requirements.
 
-2. **Identifying the Target Repositories**  
-The order of submission depends on the repositories specified in the ISA-JSON. MARS-CLI determines the correct sequence for submitting metadata and data.  
+2. **Identifying the Target Repositories**
+The order of submission depends on the repositories specified in the ISA-JSON. MARS-CLI determines the correct sequence for submitting metadata and data.
 
-3. **Registering Samples in BioSamples**  
-MARS-CLI first submits the ISA-JSON to BioSamples via a newly developed API. BioSamples accessions are crucial since other repositories reuse them. After submission, BioSamples returns a receipt containing accessions for `Source` and `Sample`, mapped to `Source characteristics` and `Sample characteristics`, respectively.  
+3. **Registering Samples in BioSamples**
+MARS-CLI first submits the ISA-JSON to BioSamples via a newly developed API. BioSamples accessions are crucial since other repositories reuse them. After submission, BioSamples returns a receipt containing accessions for `Source` and `Sample`, mapped to `Source characteristics` and `Sample characteristics`, respectively.
 
-4. **Filtering the ISA-JSON**  
-Once updated with BioSamples accessions, the ISA-JSON is filtered for each target repository. This ensures that only relevant metadata is submitted to each repository. The filtering is based on the `target repository` attribute present in the ISA-JSON assays.  
+4. **Filtering the ISA-JSON**
+Once updated with BioSamples accessions, the ISA-JSON is filtered for each target repository. This ensures that only relevant metadata is submitted to each repository. The filtering is based on the `target repository` attribute present in the ISA-JSON assays.
 
-5. **Submitting Data to Target Repositories**  
-MARS-CLI uploads data using FTP. Some repositories require that data files are present in their upload space before metadata submission. This step ensures that data availability and checksum validation are completed before sending metadata.  
+5. **Submitting Data to Target Repositories**
+MARS-CLI uploads data using FTP. Some repositories require that data files are present in their upload space before metadata submission. This step ensures that data availability and checksum validation are completed before sending metadata.
 
-6. **Registering ISA-JSON at the Target Repositories**  
-The filtered ISA-JSON is submitted to repositories that accept ISA-JSON metadata, such as ENA. The MARS project helps out with the adaptation of ISA-JSON by the repositories using the so called adapters. 
+6. **Registering ISA-JSON at the Target Repositories**
+The filtered ISA-JSON is submitted to repositories that accept ISA-JSON metadata, such as ENA. The MARS project helps out with the adaptation of ISA-JSON by the repositories using the so called adapters.
 
-7. **Processing Repository Receipts and Errors**  
-After submission, each repository returns a receipt in a standardized format defined for MARS (see [repository-api info](https://github.com/elixir-europe/MARS/tree/main/repository-services/repository-api.md)).  
-- The receipt includes the paths of objects within the ISA-JSON and their assigned accession numbers.  
-- Errors encountered during submission are processed and reported accordingly.  
+7. **Processing Repository Receipts and Errors**
+After submission, each repository returns a receipt in a standardized format defined for MARS (see [repository-api info](https://github.com/elixir-europe/MARS/tree/main/repository-services/repository-api.md)).
+- The receipt includes the paths of objects within the ISA-JSON and their assigned accession numbers.
+- Errors encountered during submission are processed and reported accordingly.
 
-8. **Updating BioSamples External References**  
-The Data Broker retrieves the BioSamples JSONs of the submitted samples using its accession numbers and updates the `External References` schema by adding the accession numbers assigned by other target repositories.  
+8. **Updating BioSamples External References**
+The Data Broker retrieves the BioSamples JSONs of the submitted samples using its accession numbers and updates the `External References` schema by adding the accession numbers assigned by other target repositories.
 
-9. **Generating an Updated ISA-JSON with Repository Information**  
-Based on the information in repository receipts, the ISA-JSON is updated with accession numbers linked to submitted metadata objects. This final, enriched ISA-JSON can then be provided as output.  
+9. **Generating an Updated ISA-JSON with Repository Information**
+Based on the information in repository receipts, the ISA-JSON is updated with accession numbers linked to submitted metadata objects. This final, enriched ISA-JSON can then be provided as output.
 
 #### Credential management
 
-MARS-CLI comes with the functionality to interact with your device's keychain backend in order to fetch the necessary credentials. This allows the user to set credentials in a safe way. 
+MARS-CLI comes with the functionality to interact with your device's keychain backend in order to fetch the necessary credentials. This allows the user to set credentials in a safe way.
 
 #### Data submission
 
@@ -45,7 +45,7 @@ MARS-CLI is not a platform to host data and will not store the data after submis
 
 ## Installation
 
-This installation procedure describes a typical Linux installation. This application can perfectly work on Windows and MacOS but some of the steps might be different. 
+This installation procedure describes a typical Linux installation. This application can perfectly work on Windows and MacOS but some of the steps might be different.
 
 This project is managed with [uv](https://docs.astral.sh/uv/). Install uv first if you don't have it yet.
 
@@ -119,6 +119,18 @@ development-url = http://localhost:8032/isabiosamples
 development-submission-url = http://localhost:8032/isabiosamples/submit
 production-url = https://www.ebi.ac.uk/biosamples/samples/
 production-submission-url = https://www.ebi.ac.uk/biosamples/samples/
+
+[metabolights]
+production-url = https://www.ebi.ac.uk/metabolights/ws3/version
+production-submission-url = https://www.ebi.ac.uk/metabolights/ws/isa-json/submit
+production-initiation-url = https://www.ebi.ac.uk/metabolights/ws/isa-json/initiate
+production-auth-url = https://www.ebi.ac.uk/metabolights/iam/realms/metabolights/protocol/openid-connect/token
+production-auth-client-name = swagger-ui
+development-url = https://wwwdev.ebi.ac.uk/metabolights/test/ws3/version
+development-submission-url = https://wwwdev.ebi.ac.uk/metabolights/test/ws/isa-json/submit
+development-initiation-url = https://wwwdev.ebi.ac.uk/metabolights/test/ws/isa-json/initiate
+development-auth-url = https://wwwdev.ebi.ac.uk/metabolights/test/iam/realms/metabolights/protocol/openid-connect/token
+development-auth-client-name = swagger-ui-test
 ```
 
 
@@ -147,7 +159,7 @@ Each of the target repositories have a set of settings:
 - development-url: URL to the development server when performing a health-check
 - development-submission-url: URL to the development server when performing a submission
 - production-url: URL to the production server when performing a health-check
-- production-submission-url: URL to the production server when performing a submissionW
+- production-submission-url: URL to the production server when performing a submission
 
 ENA and MetaboLights also have a `development-study-page-url` and `production-study-page-url`: the base URL of their
 study pages, used to link the submitted studies to the BioSamples records (see
@@ -273,7 +285,7 @@ Options:
 
 ### Options
 
-#### Biosamples submissions 
+#### Biosamples submissions
 `--submit-to-biosamples`: By default set to `True`. Will try submit ISA-JSON metadata towards Biosamples. Setting it to `False` will skip sending the ISA-JSON's metadata to Biosamples.
 
 > **Note**: Following command line will avoid submission to Biosamples repository:
@@ -281,7 +293,7 @@ Options:
 mars-cli submit  --submit-to-biosamples False my-credentials my-isa-json.json
 ```
 
-#### ENA submissions 
+#### ENA submissions
 `--submit-to-ena`: By default set to `True`. Will try submit ISA-JSON metadata towards ENA. Setting it to `False` will skip sending the ISA-JSON's metadata to ENA.
 
 > **Note**: Following command line will avoid submission to ENA repository:
@@ -374,9 +386,9 @@ python mars_cli.py --development submit --submit-to-metabolights False --submit-
 - Adjust the submission file path (`MARS/test-data/ena-minimal.json`) as needed.
 
 Alternatively, you can also use a credentials file to authenticate to the services. An example can be found here: https://github.com/elixir-europe/mars-cli/blob/main/tests/test_credentials_example.json
-	
+
 Run the MARS CLI tool to submit the isa-json using credentials file:
-	
+
 ```bash
 python mars_cli.py --development submit --submit-to-metabolights False --submit-to-ena False --credentials-file <path_to_your_credentials_file.json> MARS/test-data/ena-minimal.json
 ```

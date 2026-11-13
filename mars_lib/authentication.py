@@ -10,8 +10,7 @@ class AuthProvider(Enum):
     """
 
     WEBIN = "webin"
-    METABOLIGHTS_METADATA = "metabolights_metadata"
-    METABOLIGHTS_DATA = "metabolights_data"
+    METABOLIGHTS = "metabolights"
 
     @classmethod
     def available_providers(cls):
@@ -45,9 +44,14 @@ def load_credentials(
             credentials = json.load(file)
     else:
         raise TypeError("Credentials file must be of type str or io.TextIOWrapper.")
-
+    available_providers = AuthProvider.available_providers()
+    # ALLOW BOTH production and development user credentials.
+    # Check a key "-development" in credentials file to define
+    # development credentials
     if not all(
-        repo in AuthProvider.available_providers() for repo in credentials.keys()
+        repo in available_providers
+        or repo.removesuffix("-development") in available_providers
+        for repo in credentials.keys()
     ):
         raise ValueError(
             f"Credentials dictionary must have valid keys. Valid keys are:\n{AuthProvider.available_providers()}"
@@ -102,47 +106,3 @@ def get_webin_auth_token(
         raise ValueError(error_message)
 
     return token
-
-
-def get_metabolights_auth_token(
-    credentials_dict: dict[str, str],
-    headers: dict[str, str] = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json",
-    },
-    auth_url: str = "https://www-test.ebi.ac.uk/metabolights/mars/ws3/auth/token",
-) -> str | None:
-    """
-    Obtain Webin authentication token.
-
-    Args:
-    credentials_dict (dict): The password dictionary for authentication.
-    header (dict): The header information.
-    auth__url (str): The URL for MetaboLights authentication.
-
-    Returns:
-    str: The obtained token.
-    """
-    form_data = f'grant_type=password&username={credentials_dict["username"]}&password={credentials_dict["password"]}'
-    try:
-        response = requests.post(
-            auth_url,
-            headers=headers,
-            data=form_data,
-            timeout=20,
-        )
-        response.raise_for_status()
-
-    except Exception as ex:
-        raise ex
-
-    response_content = response.json()
-    if (
-        response
-        and "access_token" in response_content
-        and response_content["access_token"]
-    ):
-        return response_content["access_token"]
-    else:
-        error_message = f"ERROR when generating token. See response's content below:\n{response_content}"
-        raise Exception(error_message)

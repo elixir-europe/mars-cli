@@ -1,4 +1,5 @@
 import json
+from typing import Annotated
 from pydantic import BaseModel, field_validator, Field, ConfigDict
 import pydantic.alias_generators
 from mars_lib.target_repo import TargetRepository
@@ -41,10 +42,13 @@ class RepositoryResponse(BaseModel):
     # This is a Pydantic configuration that will convert the field names to camel case and be accessible as alias.
     model_config = ConfigDict(alias_generator=pydantic.alias_generators.to_camel)
 
-    target_repository: str = Field(alias="targetRepository")
+    target_repository: Annotated[str, Field(alias="targetRepository")]
     accessions: list[Accession] = []
     errors: list[Error] = []
     info: list[Info] = []
+    submission_status: Annotated[None | str, Field(alias="submissionStatus")] = None
+    task_id: Annotated[None | str, Field(alias="taskId")] = None
+    submission_id: Annotated[None | str, Field(alias="submissionId")] = None
 
     @field_validator("target_repository")
     def validate_target_repository(cls, v: str) -> str:

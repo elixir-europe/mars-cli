@@ -12,7 +12,7 @@ from mars_lib.credential import CredentialManager
 from mars_lib.isa_json import check_data_files, load_investigation
 from mars_lib.logging import init_logging, print_and_log
 from mars_lib.settings import generate_config
-from mars_lib.submit import submission
+from mars_lib.submit import SubmissionError, submission
 from mars_lib.target_repo import TargetRepository
 
 # Load CLI configuration
@@ -85,13 +85,6 @@ def cli(ctx, development):
     "--metabolights-username",
     type=click.STRING,
     help="Username for MetaboLights metadata submission",
-    envvar="METABOLIGHTS_USERNAME",
-)
-@click.option(
-    "--metabolights-ftp-username",
-    type=click.STRING,
-    help="Username for MetaboLights data submission",
-    envvar="METABOLIGHTS_FTP_USERNAME",
 )
 @click.option(
     "--credentials-file",
@@ -135,14 +128,13 @@ def cli(ctx, development):
 @click.option(
     "--output",
     type=click.STRING,
-    default=f"output_{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}",
+    default=f"output_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}",
 )
 @click.pass_context
 def submit(
     ctx,
     webin_username,
     metabolights_username,
-    metabolights_ftp_username,
     credentials_file,
     isa_json_file,
     submit_to_biosamples,
@@ -172,18 +164,27 @@ def submit(
 
     data_file_paths = list_files_in_folders(data_folder)
 
-    submission(
-        webin_username,
-        metabolights_username,
-        metabolights_ftp_username,
-        credentials_file,
-        isa_json_file.name,
-        target_repositories,
-        urls_dict,
-        file_transfer,
-        output,
-        data_file_paths,
-    )
+    is_development = ctx.obj.get("DEVELOPMENT")
+    if is_development is None:
+        is_development = os.getenv("MARS_DEBUG") in ["1", 1]
+
+    try:
+        submission(
+            webin_username,
+            metabolights_username,
+            credentials_file,
+            isa_json_file.name,
+            target_repositories,
+            urls_dict,
+            file_transfer,
+            output,
+            data_file_paths=data_file_paths,
+            config=config,
+            is_development=is_development,
+        )
+    except SubmissionError as err:
+        print_and_log(str(err), level="error")
+        sys.exit(1)
 
 
 @cli.command()
@@ -282,9 +283,7 @@ def check_data_files_command(isa_json_file, data_folder):
 @cli.command()
 @click.option(
     "--auth-provider",
-    type=click.Choice(
-        ["webin", "metabolights_metadata", "metabolights_data"], case_sensitive=False
-    ),
+    type=click.Choice(["webin", "metabolights"], case_sensitive=False),
     is_flag=False,
     flag_value="value",
     required=True,

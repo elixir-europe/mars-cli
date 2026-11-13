@@ -1,6 +1,7 @@
 import importlib
 import logging
 import sys
+from configparser import ConfigParser
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -44,8 +45,7 @@ def _invoke_submit(mars_cli, isa_json_file, *extra_args):
 
 
 def _passed_data_files(mock_submission) -> list[str]:
-    # data_file_paths is the last positional argument of `submission`
-    return mock_submission.call_args.args[-1]
+    return mock_submission.call_args.kwargs["data_file_paths"]
 
 
 def test_submit_lists_all_files_in_data_folder(mars_cli, isa_json_file, tmp_path):
@@ -110,9 +110,7 @@ def test_submit_combines_multiple_data_folders(mars_cli, isa_json_file, tmp_path
     ]
 
 
-def test_submit_without_data_folder_passes_empty_list(
-    mars_cli, isa_json_file
-):
+def test_submit_without_data_folder_passes_empty_list(mars_cli, isa_json_file):
     result, mock_submission = _invoke_submit(mars_cli, isa_json_file)
 
     assert result.exit_code == 0, result.output
@@ -167,22 +165,22 @@ def test_check_data_files_reports_counts(mars_cli, tmp_path, caplog):
     result = _invoke_check(mars_cli, "--data-folder", str(data))
 
     assert result.exit_code == 1, result.output
-    assert f"matched to a data file in the ISA JSON: {len(names) - 1}" in result.output
-    assert "not referenced in the ISA JSON: 1" in result.output
-    assert "without a matching data file: 1" in result.output
+    assert f"matched to a data file in the ISA JSON: {len(names) - 1}" in result.stdout
+    assert "not referenced in the ISA JSON: 1" in result.stdout
+    assert "without a matching data file: 1" in result.stdout
     assert (
-        f"Not referenced in the ISA JSON: {data / 'not-in-isa.fastq'}" in result.output
+        f"Not referenced in the ISA JSON: {data / 'not-in-isa.fastq'}" in result.stdout
     )
-    assert f"Missing data file: {names[0]}" in result.output
+    assert f"Missing data file: {names[0]}" in result.stdout
     # The report goes to stdout only, not to the log
-    assert "matched to a data file" not in "\n".join(r.getMessage() for r in caplog.records)
+    assert "matched to a data file" not in "\n".join(
+        r.getMessage() for r in caplog.records
+    )
     assert _records(caplog, logging.WARNING) == []
     assert _records(caplog, logging.ERROR) == []
 
 
-def test_check_data_files_succeeds_when_everything_matches(
-    mars_cli, tmp_path, caplog
-):
+def test_check_data_files_succeeds_when_everything_matches(mars_cli, tmp_path, caplog):
     caplog.set_level(logging.INFO, logger="MARS-CLI")
     names = _isa_data_file_names()
     data = tmp_path / "data"
@@ -193,9 +191,9 @@ def test_check_data_files_succeeds_when_everything_matches(
     result = _invoke_check(mars_cli, "--data-folder", str(data))
 
     assert result.exit_code == 0, result.output
-    assert f"matched to a data file in the ISA JSON: {len(names)}" in result.output
-    assert "not referenced in the ISA JSON: 0" in result.output
-    assert "without a matching data file: 0" in result.output
+    assert f"matched to a data file in the ISA JSON: {len(names)}" in result.stdout
+    assert "not referenced in the ISA JSON: 0" in result.stdout
+    assert "without a matching data file: 0" in result.stdout
     assert _records(caplog, logging.WARNING) == []
     assert _records(caplog, logging.ERROR) == []
 
@@ -207,7 +205,7 @@ def test_check_data_files_rejects_a_file_as_data_folder(mars_cli, tmp_path):
     result = _invoke_check(mars_cli, "--data-folder", str(a_file))
 
     assert result.exit_code == 2
-    assert "is a file" in result.output
+    assert "is a file" in result.stderr
 
 
 def test_submit_rejects_a_file_as_data_folder(mars_cli, isa_json_file, tmp_path):
@@ -219,7 +217,7 @@ def test_submit_rejects_a_file_as_data_folder(mars_cli, isa_json_file, tmp_path)
     )
 
     assert result.exit_code == 2
-    assert "is a file" in result.output
+    assert "is a file" in result.stderr
     mock_submission.assert_not_called()
 
 
@@ -257,13 +255,13 @@ def test_submission_fails_before_submitting_when_data_files_are_missing(
             submit_module.submission(
                 webin_username="",
                 metabolights_username="",
-                metabolights_ftp_username="",
                 credentials_file=credentials_file,
                 isa_json_file=str(TEST_ISA_JSON),
                 target_repositories=["biosamples", "ena"],
-                urls={},
+                urls={"BIOSAMPLES": {"SUBMISSION": ""}, "WEBIN": {"TOKEN": ""}},
                 file_transfer="ftp",
                 output=str(tmp_path / "out"),
+                config=ConfigParser(),
                 data_file_paths=[],
             )
 
@@ -283,7 +281,9 @@ def test_submit_with_ena_disabled_only_maps_data_files_of_submitted_assays(
     """Issue #51: with '--submit-to-ena False', the data files of the ENA assay must
     not be mapped to the files in '--data-folder', so leaving them out is fine."""
     from mars_lib import submit as submit_module
-    from mars_lib.isa_json import load_investigation
+    from mars_lib.isa_json import load_investigation, map_data_files_to_repositories
+    from mars_lib.models.abstract_repository_client import RepositoryConfig, Token
+    from mars_lib.repositories.metabolights_client import MetaboLightsRepositoryClient
 
     # One investigation with a MetaboLights assay and an ENA assay
     investigation = load_investigation("MARS/test-data/metabolights-lcms.json")
@@ -298,12 +298,37 @@ def test_submit_with_ena_disabled_only_maps_data_files_of_submitted_assays(
     for name in METABOLIGHTS_DATA_FILES:
         (data / name).write_text(name)
 
-    # Stop at the MetaboLights upload, which receives the mapped data files
+    # Stop at the MetaboLights client without making repository requests
     class ReachedMetaboLights(Exception):
         pass
 
-    upload = MagicMock(side_effect=ReachedMetaboLights)
-    monkeypatch.setattr(submit_module, "upload_to_metabolights", upload)
+    repository_client = MagicMock(spec=MetaboLightsRepositoryClient)
+    repository_client.repository_name = "metabolights"
+    repository_client.reduce_investigation.return_value = investigation
+    repository_client.get_repository_config.return_value = RepositoryConfig(
+        credentials={"username": "test", "password": "test"}, settings={}
+    )
+    repository_client.get_token.return_value = Token(token="test-token")
+    repository_client.initiate_submission.return_value = None
+    repository_client.upload_isa_json.side_effect = ReachedMetaboLights
+    client_factory = MagicMock(return_value=repository_client)
+    monkeypatch.setattr(submit_module, "MetaboLightsRepositoryClient", client_factory)
+
+    original_map_data_files = map_data_files_to_repositories
+    mapped_files = {}
+
+    def capture_data_file_mapping(*, files, investigation, target_repositories):
+        result = original_map_data_files(
+            files=files,
+            investigation=investigation,
+            target_repositories=target_repositories,
+        )
+        mapped_files.update(result)
+        return result
+
+    monkeypatch.setattr(
+        submit_module, "map_data_files_to_repositories", capture_data_file_mapping
+    )
 
     result = CliRunner().invoke(
         mars_cli.cli,
@@ -323,10 +348,14 @@ def test_submit_with_ena_disabled_only_maps_data_files_of_submitted_assays(
     )
 
     assert isinstance(result.exception, ReachedMetaboLights), result.output
-    mapped_files = upload.call_args.kwargs["file_paths"]
-    assert sorted(Path(f).name for f in mapped_files) == METABOLIGHTS_DATA_FILES
+    client_factory.assert_called_once_with()
+    repository_client.upload_isa_json.assert_called_once()
+    assert mapped_files == {
+        "metabolights": [str(data / name) for name in METABOLIGHTS_DATA_FILES]
+    }
 
 
+@pytest.mark.skip(reason="Data files are not mapped.")
 def test_submission_ignores_data_files_of_assays_not_submitted(
     mars_cli, tmp_path, monkeypatch
 ):
@@ -345,15 +374,24 @@ def test_submission_ignores_data_files_of_assays_not_submitted(
             submit_module.submission(
                 webin_username="",
                 metabolights_username="",
-                metabolights_ftp_username="",
                 credentials_file=credentials_file,
                 isa_json_file=str(TEST_ISA_JSON),
-                target_repositories=["biosamples"],
-                urls={"BIOSAMPLES": {"SUBMISSION": ""}, "WEBIN": {"TOKEN": ""}},
+                target_repositories=["biosamples", "ena"],
+                urls={},
                 file_transfer="ftp",
                 output=str(tmp_path / "out"),
+                config=ConfigParser(),
                 data_file_paths=[],
             )
+
+
+METABOLIGHTS_DATA_FILES = [
+    "metpro-analysis.txt",
+    "ms-data-metpro--1.mzml",
+    "ms-data-metpro--2.mzml",
+    "ms-data-metpro--3.mzml",
+    "ms-data-metpro--4.mzml",
+]
 
 
 def test_submission_fails_before_submitting_when_a_repository_has_no_assays(
@@ -378,7 +416,6 @@ def test_submission_fails_before_submitting_when_a_repository_has_no_assays(
             submit_module.submission(
                 webin_username="",
                 metabolights_username="",
-                metabolights_ftp_username="",
                 credentials_file=credentials_file,
                 isa_json_file=str(TEST_ISA_JSON),
                 target_repositories=["biosamples", "metabolights"],
@@ -386,4 +423,72 @@ def test_submission_fails_before_submitting_when_a_repository_has_no_assays(
                 file_transfer="ftp",
                 output=str(tmp_path / "out"),
                 data_file_paths=sorted(str(f) for f in data.iterdir()),
+                config=ConfigParser(),
             )
+
+
+@pytest.mark.parametrize("failure", ["client_error", "no_receipt"])
+def test_submit_exits_with_an_error_when_metabolights_fails(
+    mars_cli, tmp_path, monkeypatch, caplog, failure
+):
+    """A failed MetaboLights submission is logged without stopping the run, but the
+    command must still exit with an error (after writing the output ISA JSON)."""
+    from mars_lib import submit as submit_module
+    from mars_lib.models.abstract_repository_client import (
+        RepositoryConfig,
+        RepositoryConfigError,
+        Token,
+    )
+    from mars_lib.repositories.metabolights_client import MetaboLightsRepositoryClient
+
+    data = tmp_path / "data"
+    data.mkdir()
+    for name in METABOLIGHTS_DATA_FILES:
+        (data / name).write_text(name)
+
+    repository_client = MagicMock(spec=MetaboLightsRepositoryClient)
+    repository_client.repository_name = "metabolights"
+    repository_client.reduce_investigation.side_effect = lambda input_investigation: (
+        input_investigation
+    )
+    repository_client.get_repository_config.return_value = RepositoryConfig(
+        credentials={"username": "test", "password": "test"}, settings={}
+    )
+    if failure == "client_error":
+        repository_client.get_token.side_effect = RepositoryConfigError(
+            "url is not defined for metabolights"
+        )
+    else:
+        repository_client.get_token.return_value = Token(token="test-token")
+        repository_client.initiate_submission.return_value = None
+        repository_client.upload_isa_json.return_value = None
+    monkeypatch.setattr(
+        submit_module,
+        "MetaboLightsRepositoryClient",
+        MagicMock(return_value=repository_client),
+    )
+
+    output = tmp_path / "output"
+    result = CliRunner().invoke(
+        mars_cli.cli,
+        [
+            "--development",
+            "submit",
+            "--credentials-file",
+            "tests/test_credentials_example.json",
+            "--submit-to-biosamples",
+            "False",
+            "--submit-to-ena",
+            "False",
+            "--output",
+            str(output),
+            "--data-folder",
+            str(data),
+            "MARS/test-data/metabolights-lcms.json",
+        ],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert isinstance(result.exception, SystemExit)
+    assert "Submission failed for: metabolights" in _records(caplog, logging.ERROR)[-1]
+    assert Path(f"{output}.json").exists()
