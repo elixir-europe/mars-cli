@@ -69,6 +69,14 @@ class MetaboLightsRepositoryClient(BaseRepositoryClient):
         return errors or None
 
     def get_token(self, context: SubmissionContext) -> None | Token:
+        errors = self.check_repository_config(
+            repository_config=context.repository_config
+        )
+        if errors:
+            raise RepositoryConfigError(
+                f"repository configuration error: {','.join(errors)}"
+            )
+
         credentials = context.repository_config.credentials
         settings = context.repository_config.settings
 

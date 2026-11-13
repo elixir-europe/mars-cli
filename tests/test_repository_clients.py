@@ -217,6 +217,66 @@ def test_get_repository_config_uses_development_settings_and_credentials():
     assert config.credentials == {"username": "dev"}
 
 
+@pytest.mark.parametrize(
+    "is_development, credentials, expected",
+    [
+        # Without development credentials, development mode uses the regular ones
+        (True, {"metabolights": {"username": "regular"}}, "regular"),
+        (
+            True,
+            {
+                "metabolights": {"username": "regular"},
+                "metabolights-development": {"username": "dev"},
+            },
+            "dev",
+        ),
+        (
+            False,
+            {
+                "metabolights": {"username": "regular"},
+                "metabolights-development": {"username": "dev"},
+            },
+            "regular",
+        ),
+    ],
+)
+def test_get_repository_config_picks_credentials(is_development, credentials, expected):
+    parser = ConfigParser()
+    parser["metabolights"] = {"url": "https://metabolights.test"}
+    client = _ConcreteRepositoryClient("metabolights", "metabolights")
+
+    config = client.get_repository_config(
+        parser, credentials=credentials, is_development=is_development
+    )
+
+    assert config.credentials == {"username": expected}
+
+
+@pytest.mark.parametrize("is_development", [True, False])
+def test_get_repository_config_rejects_missing_credentials(is_development):
+    parser = ConfigParser()
+    parser["metabolights"] = {"url": "https://metabolights.test"}
+    client = _ConcreteRepositoryClient("metabolights", "metabolights")
+
+    with pytest.raises(RepositoryConfigError, match="No metabolights credentials"):
+        client.get_repository_config(
+            parser,
+            credentials={"webin": {"username": "u", "password": "p"}},
+            is_development=is_development,
+        )
+
+
+def test_metabolights_get_token_rejects_missing_credentials(monkeypatch):
+    def fail_post(*args, **kwargs):
+        raise AssertionError("no token request expected")
+
+    monkeypatch.setattr(requests, "post", fail_post)
+    context = _context(repository_config=_repository_config(credentials={}))
+
+    with pytest.raises(RepositoryConfigError, match="Credentials are not defined"):
+        MetaboLightsRepositoryClient().get_token(context)
+
+
 def test_get_repository_config_rejects_missing_configuration():
     client = _ConcreteRepositoryClient("metabolights", "metabolights")
 
