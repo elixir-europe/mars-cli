@@ -46,10 +46,7 @@ ENA_COMPLETE_ISA = "MARS/test-data/ena-complete.json"
 HOLOFOOD_ISA = "MARS/test-data/HoloFoodinISA_v1.0.json"
 # Every sampling step is split over two linked processes: one with only the source as
 # input, and one with only the sample as output
-PTX_ISA = (
-    "MARS/test-data/ISA-PTX-TEST/isajson/"
-    "i_investigation_PTX_Pilot_Daphnia_magna_valid.json"
-)
+PTX_ISA = "MARS/test-data/i_investigation_PTX_Pilot_Daphnia_magna_valid.json"
 
 
 def _multi_repository_investigation():
@@ -620,24 +617,24 @@ def test_reduce_investigation_follows_previous_process_without_inputs():
     assert _ids(metabolights.processSequence) == [collection_3065.id]
 
 
-# @pytest.mark.parametrize(
-#     "target_repo", [TargetRepository.ENA.value, TargetRepository.METABOLIGHTS.value]
-# )
-# def test_reduce_investigation_keeps_sources_of_linked_processes_in_ptx(target_repo):
-#     investigation = load_investigation(PTX_ISA)
-#     original = investigation.studies[0]
-#     # The protocol of the first halves, that take the sources
-#     source_protocol_ids = {
-#         process.executesProtocol.id
-#         for process in original.processSequence
-#         if process.inputs
-#     }
+@pytest.mark.parametrize(
+    "target_repo", [TargetRepository.ENA.value, TargetRepository.METABOLIGHTS.value]
+)
+def test_reduce_investigation_keeps_sources_of_linked_processes_in_ptx(target_repo):
+    investigation = load_investigation(PTX_ISA)
+    original = investigation.studies[0]
+    # The protocol of the first halves, that take the sources
+    source_protocol_ids = {
+        process.executesProtocol.id
+        for process in original.processSequence
+        if process.inputs
+    }
 
-#     study = reduce_investigation_for_target_repo(investigation, target_repo).studies[0]
+    study = reduce_investigation_for_target_repo(investigation, target_repo).studies[0]
 
-#     assert _ids(study.materials.sources) == _ids(original.materials.sources)
-#     assert source_protocol_ids <= set(_ids(study.protocols))
-#     assert _ids(study.processSequence) == _ids(original.processSequence)
+    assert _ids(study.materials.sources) == _ids(original.materials.sources)
+    assert source_protocol_ids <= set(_ids(study.protocols))
+    assert _ids(study.processSequence) == _ids(original.processSequence)
 
 
 def test_data_type_is_free_text():
