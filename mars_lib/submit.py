@@ -48,7 +48,7 @@ from pathlib import Path
 
 
 def save_step_to_file(time_stamp: float, filename: str, investigation: Investigation):
-    dir_path = f"tmp/{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+    dir_path = f"tmp/{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}"
     os.makedirs(dir_path, exist_ok=True)
 
     with open(f"{dir_path}/{filename}.json", "w") as f:

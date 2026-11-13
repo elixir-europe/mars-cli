@@ -128,7 +128,7 @@ def cli(ctx, development):
 @click.option(
     "--output",
     type=click.STRING,
-    default=f"output_{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}",
+    default=f"output_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}",
 )
 @click.pass_context
 def submit(
