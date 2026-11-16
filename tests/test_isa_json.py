@@ -480,6 +480,8 @@ def test_reduce_investigation_removes_unused_study_other_materials():
         "#other_material/3067",
         "#other_material/3207",
         "#other_material/3208",
+        "#other_material/3210",
+        "#other_material/3211",
     ]
 
     ena = reduce_investigation_for_target_repo(
@@ -493,6 +495,8 @@ def test_reduce_investigation_removes_unused_study_other_materials():
     assert _ids(metabolights.materials.otherMaterials) == [
         "#other_material/3207",
         "#other_material/3208",
+        "#other_material/3210",
+        "#other_material/3211",
     ]
 
 
