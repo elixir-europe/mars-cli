@@ -175,6 +175,9 @@ class SubmissionContext(AbstractClientModel):
 
 
 class BaseRepositoryClient(abc.ABC):
+    # Folder below the FTP upload path that receives the data files (None: the upload path itself)
+    data_file_folder: None | str = None
+
     def __init__(self, repository_name: str, repository_config_key: str, **kwargs):
         self.repository_name = repository_name
         self.repository_config_key = repository_config_key
@@ -213,7 +216,12 @@ class BaseRepositoryClient(abc.ABC):
         uploader = FTPUploader(
             credentials.host, credentials.username, credentials.password
         )
-        uploader.upload(data_file_paths, target_location=credentials.upload_path)
+        target_location = credentials.upload_path
+        if self.data_file_folder:
+            target_location = (
+                f"{(credentials.upload_path or '').rstrip('/')}/{self.data_file_folder}"
+            )
+        uploader.upload(data_file_paths, target_location=target_location)
 
     def reduce_investigation(self, input_investigation: Investigation) -> Investigation:
         """

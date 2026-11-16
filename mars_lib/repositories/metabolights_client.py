@@ -22,8 +22,13 @@ from mars_lib.models.repository_response import RepositoryResponse
 
 logger = logging.getLogger(__name__)
 
+# MetaboLights expects raw data files in the RAW_FILES folder of the study's FILES folder
+RAW_FILES_FOLDER = "RAW_FILES"
+
 
 class MetaboLightsRepositoryClient(BaseRepositoryClient):
+    data_file_folder = RAW_FILES_FOLDER
+
     def __init__(self, **kwargs):
 
         super().__init__(
@@ -139,6 +144,13 @@ class MetaboLightsRepositoryClient(BaseRepositoryClient):
         # Select only first study
         if len(filtered_investigation.studies) > 1:
             filtered_investigation.studies = [filtered_investigation.studies[0]]
+
+        # Data files are uploaded to RAW_FILES, so reference them there
+        for study in filtered_investigation.studies:
+            for assay in study.assays:
+                for data_file in assay.dataFiles:
+                    if data_file.name and not data_file.name.startswith("FILES/"):
+                        data_file.name = f"FILES/{RAW_FILES_FOLDER}/{data_file.name}"
 
         return filtered_investigation
 

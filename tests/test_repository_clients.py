@@ -8,6 +8,8 @@ import requests
 from mars_lib.models.abstract_repository_client import (
     AuthError,
     BaseRepositoryClient,
+    DataFileTransferConfig,
+    FtpCredentials,
     RepositoryConfig,
     RepositoryConfigError,
     RepositoryInitiationError,
@@ -180,6 +182,51 @@ def test_reduce_investigation_filters_assays_and_protocols_without_mutating_inpu
     assert [protocol.id for protocol in reduced.studies[0].protocols] == ["#protocol/1"]
     assert len(investigation.studies) == 2
     assert len(investigation.studies[0].assays) == 2
+
+
+def test_metabolights_reduce_investigation_references_data_files_in_raw_files():
+    assay = _assay(1)
+    assay["dataFiles"] = [
+        {"@id": "#data_file/1", "name": "run1.raw", "type": "Raw Spectral Data File"}
+    ]
+    assay["processSequence"][0]["outputs"] = [{"@id": "#data_file/1"}]
+    investigation = _investigation([_study(assays=[assay])])
+
+    reduced = MetaboLightsRepositoryClient().reduce_investigation(investigation)
+
+    assert [df.name for df in reduced.studies[0].assays[0].dataFiles] == [
+        "FILES/RAW_FILES/run1.raw"
+    ]
+    assert investigation.studies[0].assays[0].dataFiles[0].name == "run1.raw"
+
+
+def test_metabolights_upload_data_files_uploads_to_raw_files(monkeypatch):
+    uploads = []
+
+    class FakeUploader:
+        def __init__(self, host, username, password):
+            pass
+
+        def upload(self, file_paths, target_location="/"):
+            uploads.append((file_paths, target_location))
+
+    monkeypatch.setattr(
+        "mars_lib.models.abstract_repository_client.FTPUploader", FakeUploader
+    )
+    context = _context(submission_id="submission-1")
+    context.data_file_transfer_config = DataFileTransferConfig(
+        credentials=FtpCredentials(
+            host="ftp.test",
+            username="user",
+            password="secret",
+            upload_path="/test/req-1/",
+        ),
+        data_file_paths=["data/run1.raw"],
+    )
+
+    MetaboLightsRepositoryClient().upload_data_files(context)
+
+    assert [target for _, target in uploads] == ["/test/req-1/RAW_FILES"]
 
 
 def test_filter_comments_by_key_returns_only_matching_comments():
