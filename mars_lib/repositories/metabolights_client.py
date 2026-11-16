@@ -297,11 +297,13 @@ class MetaboLightsRepositoryClient(BaseRepositoryClient):
                 )
                 submission_response.raise_for_status()
 
-                response = RepositoryResponse.model_validate(submission_response.json())
-                status = response.submission_status
-                if status != "PENDING":
-                    result = response
-                    break
+                # MetaboLights answers `null` while the submission is still being processed
+                response_content = submission_response.json()
+                if response_content is not None:
+                    response = RepositoryResponse.model_validate(response_content)
+                    if response.submission_status != "PENDING":
+                        result = response
+                        break
                 time.sleep(context.submission_retry_period_in_seconds)
             if not result:
                 raise RepositorySubmissionError(

@@ -553,6 +553,45 @@ def test_upload_isa_json_puts_document_then_polls_until_complete(monkeypatch):
     assert result.submission_status == "SUCCESS"
 
 
+def test_upload_isa_json_keeps_polling_while_status_is_null(monkeypatch):
+    client = MetaboLightsRepositoryClient()
+    context = _context(submission_id="submission-1", max_retry=3, retry_period=0)
+    pending = {
+        "targetRepository": "metabolights",
+        "submissionStatus": "PENDING",
+        "taskId": "task-1",
+    }
+    null_response = _Response()
+    null_response.payload = None
+    poll_responses = iter(
+        [
+            null_response,
+            _Response(
+                {
+                    "targetRepository": "metabolights",
+                    "submissionStatus": "SUCCESS",
+                    "taskId": "task-1",
+                }
+            ),
+        ]
+    )
+    monkeypatch.setattr(
+        "mars_lib.repositories.metabolights_client.requests.post",
+        lambda *args, **kwargs: _Response(pending),
+    )
+    monkeypatch.setattr(
+        "mars_lib.repositories.metabolights_client.requests.get",
+        lambda *args, **kwargs: next(poll_responses),
+    )
+    monkeypatch.setattr(
+        "mars_lib.repositories.metabolights_client.time.sleep", lambda _: None
+    )
+
+    result = client.upload_isa_json(context, Token(token="access"))
+
+    assert result.submission_status == "SUCCESS"
+
+
 def test_upload_isa_json_rejects_missing_submission_id():
     client = MetaboLightsRepositoryClient()
 
