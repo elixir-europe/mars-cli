@@ -301,7 +301,9 @@ def submission(
             elif not mars_receipt.errors and mars_receipt.accessions:
                 investigation = update_investigation(investigation, mars_receipt)
                 print_and_log(
-                    f"Submission to {repository_name} is successful.", level="info"
+                    f"Submission to {repository_name} was successful. Result:\n"
+                    f"{mars_receipt.model_dump(by_alias=True, exclude_none=True)}",
+                    level="info",
                 )
                 if is_development:
                     save_step_to_file(time_stamp, "3_after_metabolights", investigation)
