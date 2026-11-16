@@ -45,7 +45,12 @@ class FTPUploader:
             )
             ftps.prot_p()
 
-            ftps.cwd(target_location)
+            try:
+                ftps.cwd(target_location)
+            except ftplib.error_perm:
+                # The target folder (e.g. RAW_FILES below the upload path) does not exist yet
+                ftps.mkd(target_location)
+                ftps.cwd(target_location)
             previous_content = ftps.nlst()
             for file_to_upload in file_paths:
                 file_name = os.path.basename(file_to_upload)

@@ -46,7 +46,7 @@ _POC_CONFIG.read_dict(
 )
 DEV_URLS = TargetRepository.get_repository_urls_from_config(_POC_CONFIG)["DEV"]
 ENA_STUDY_PAGE = "https://wwwdev.ebi.ac.uk/ena/browser/view/"
-MTBLS_STUDY_PAGE = "https://www-test.ebi.ac.uk/metabolights/"
+MTBLS_STUDY_PAGE = "https://wwwdev.ebi.ac.uk/metabolights/"
 # Sample 'leaf 1', the one used in the ENA assay of the fixture below
 LEAF_ACCESSION = "SAMEA131504584"
 
@@ -71,8 +71,21 @@ def _investigation_after_ena_and_metabolights():
     mtbls_assay.id = "#assay/mtbls"
     mtbls_assay.comments = [Comment(name="target_repository", value="metabolights")]
     study.assays.append(mtbls_assay)
-    study.comments.append(Comment(name="metabolights_accession", value="MTBLS1234"))
-    return investigation
+    # Receipt as MetaboLights returns it: the study accession on the study itself
+    mtbls_receipt = RepositoryResponse.model_validate(
+        {
+            "targetRepository": "metabolights",
+            "accessions": [
+                {
+                    "path": [
+                        {"key": "studies", "where": {"key": "title", "value": study.title}}
+                    ],
+                    "value": "MTBLS1234",
+                }
+            ],
+        }
+    )
+    return update_investigation(investigation, mtbls_receipt)
 
 
 # -- #

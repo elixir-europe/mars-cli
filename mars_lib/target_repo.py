@@ -78,7 +78,7 @@ class TargetRepository(str, Enum):
                     "STUDY-PAGE": config.get(
                         "metabolights",
                         "development-study-page-url",
-                        fallback="https://www-test.ebi.ac.uk/metabolights/",
+                        fallback="https://wwwdev.ebi.ac.uk/metabolights/",
                     ),
                 },
                 "BIOSAMPLES": {
@@ -146,7 +146,7 @@ class TargetRepository(str, Enum):
                     "TOKEN": config.get(
                         "metabolights",
                         "production-token-url",
-                        fallback="https://www-test.ebi.ac.uk/metabolights/mars/ws3/auth/token",
+                        fallback="https://www.ebi.ac.uk/metabolights/iam/realms/metabolights/protocol/openid-connect/token",
                     ),
                     "STUDY-PAGE": config.get(
                         "metabolights",

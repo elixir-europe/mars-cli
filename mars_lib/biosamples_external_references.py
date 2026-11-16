@@ -29,7 +29,7 @@ biosamples_endpoints = {
 # Comments in which the submission stores each repository's study accession
 study_accession_comments = {
     TargetRepository.ENA.value: f"{TargetRepository.ENA.value}_study_accession",
-    TargetRepository.METABOLIGHTS.value: "metabolights_accession",
+    TargetRepository.METABOLIGHTS.value: f"{TargetRepository.METABOLIGHTS.value}_study_accession",
 }
 # Resolved relative to this module so it works from any working directory and
 # from an installed package.
