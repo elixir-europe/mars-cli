@@ -20,14 +20,15 @@ The GitHub Action (or you, locally) will then call mars-cli using:
   Data files:      poc_work/<submission>/data/*.fastq.gz
 """
 
-
 import json
 import os
 import textwrap
 from pathlib import Path
 
 from isa_generator import generate_investigation_with_data
+import dotenv
 
+dotenv.load_dotenv()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -64,9 +65,16 @@ def ensure_settings_ini() -> Path:
         development-submission-url = http://localhost:8032/isabiosamples/submit
 
         [metabolights]
-        development-url = https://www-test.ebi.ac.uk/metabolights/mars/ws3/submissions/
-        development-submission-url = https://www-test.ebi.ac.uk/metabolights/mars/ws3/submissions/
-        development-token-url = https://www-test.ebi.ac.uk/metabolights/mars/ws3/auth/token
+        production-url = https://www.ebi.ac.uk/metabolights/ws3/version
+        production-submission-url = https://www.ebi.ac.uk/metabolights/ws/isa-json/submit
+        production-initiation-url = https://www.ebi.ac.uk/metabolights/ws/isa-json/initiate
+        production-auth-url = https://www.ebi.ac.uk/metabolights/iam/realms/metabolights/protocol/openid-connect/token
+        production-auth-client-name = swagger-ui
+        development-url = https://wwwdev.ebi.ac.uk/metabolights/test/ws3/version
+        development-submission-url = https://wwwdev.ebi.ac.uk/metabolights/test/ws/isa-json/submit
+        development-initiation-url = https://wwwdev.ebi.ac.uk/metabolights/test/ws/isa-json/initiate
+        development-auth-url = https://wwwdev.ebi.ac.uk/metabolights/test/iam/realms/metabolights/protocol/openid-connect/token
+        development-auth-client-name = swagger-ui-test
         """
         ).strip()
         + "\n"
@@ -81,12 +89,9 @@ def write_credentials_json(work_dir: Path) -> Path:
     required_vars = [
         "WEBIN_USERNAME",
         "WEBIN_PASSWORD",
-        # "METABOLIGHTS_METADATA_USERNAME",
-        # "METABOLIGHTS_METADATA_PASSWORD",
-        # "METABOLIGHTS_DATA_USERNAME",
-        # "METABOLIGHTS_DATA_PASSWORD",
+        "METABOLIGHTS_USERNAME",
+        "METABOLIGHTS_PASSWORD",
     ]
-
     missing = [v for v in required_vars if not os.environ.get(v)]
     if missing:
         raise RuntimeError(
@@ -98,14 +103,10 @@ def write_credentials_json(work_dir: Path) -> Path:
             "username": os.environ["WEBIN_USERNAME"],
             "password": os.environ["WEBIN_PASSWORD"],
         },
-        # "metabolights_metadata": {
-        #     "username": os.environ["METABOLIGHTS_METADATA_USERNAME"],
-        #     "password": os.environ["METABOLIGHTS_METADATA_PASSWORD"],
-        # },
-        # "metabolights_data": {
-        #     "username": os.environ["METABOLIGHTS_DATA_USERNAME"],
-        #     "password": os.environ["METABOLIGHTS_DATA_PASSWORD"],
-        # },
+        "metabolights": {
+            "username": os.environ["METABOLIGHTS_USERNAME"],
+            "password": os.environ["METABOLIGHTS_PASSWORD"],
+        },
     }
 
     cred_path = work_dir / "credentials.json"
